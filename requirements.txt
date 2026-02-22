@@ -2,6 +2,7 @@ fastapi
 uvicorn
 jinja2
 sqlalchemy
-psycopg2-binary
 passlib
 python-multipart
+psycopg2-binary
+itsdangerous

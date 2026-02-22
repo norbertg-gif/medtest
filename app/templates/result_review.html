@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Archivovaný test</title>
+    <style>
+        body { font-family: Arial; padding:40px; }
+        .question { margin-bottom:30px; padding:15px; border:1px solid #ccc; }
+        .correct { color:green; font-weight:bold; }
+        .wrong { color:red; font-weight:bold; }
+        .selected { background:#eef; }
+    </style>
+</head>
+<body>
+
+<h2>Archivovaný test</h2>
+
+<p>
+    <strong>{{ result.username }}</strong><br>
+    Test: {{ result.test_name }}<br>
+    Dátum: {{ result.completed_at }}<br>
+    Skóre: {{ result.score_percent }} %
+</p>
+
+<hr>
+
+{% for item in snapshot %}
+<div class="question">
+
+    <h3>{{ item.question }}</h3>
+
+    {% for answer in item.answers %}
+        <div class="
+            {% if answer.is_selected %}selected{% endif %}
+        ">
+
+            {% if answer.is_correct %}
+                <span class="correct">✔</span>
+            {% else %}
+                <span class="wrong">✖</span>
+            {% endif %}
+
+            {{ answer.text }}
+
+            {% if answer.is_selected %}
+                <strong>(vybral používateľ)</strong>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+</div>
+{% endfor %}
+
+<br>
+<a href="/admin">Späť do admin</a>
+
+</body>
+</html>

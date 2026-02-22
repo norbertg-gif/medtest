@@ -1,0 +1,4 @@
+uvicorn app.main:app --reload
+
+python -m app.create_user
+python -m app.import_csv

@@ -1,0 +1,9 @@
+order_number;question_text;multiple_allowed;answer_text;is_correct
+1;Ktoré z nasledujúcich sú párové orgány?;1;Obličky;1
+1;Ktoré z nasledujúcich sú párové orgány?;1;Pľúca;1
+1;Ktoré z nasledujúcich sú párové orgány?;1;Srdce;0
+1;Ktoré z nasledujúcich sú párové orgány?;1;Pečeň;0
+1;Ktoré z nasledujúcich sú párové orgány?;1;Oči;1
+2;Otázka 2;0;správna odpoveď;1
+2;Otázka 2;0;nesprávna odpoveď;0
+2;Otázka 2;0;nesprávna odpoveď;0

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Review testu</title>
+    <style>
+        body { font-family: Arial; padding:40px; }
+        .question { margin-bottom:30px; padding:15px; border:1px solid #ccc; }
+        .correct { color:green; font-weight:bold; }
+        .wrong { color:red; font-weight:bold; }
+        .selected { background:#eef; }
+    </style>
+</head>
+<body>
+
+<h2>Vyhodnotenie testu: {{ review_user.username }}</h2>
+
+<p>
+    Správne: {{ correct }} / {{ total }} <br>
+    Úspešnosť: <strong>{{ percent }} %</strong>
+</p>
+
+<hr>
+
+{% for item in review_data %}
+<div class="question">
+
+    <h3>{{ item.question.text }}</h3>
+
+    {% for answer in item.answers %}
+        {% set is_selected = answer.id|string in item.selected %}
+        {% set is_correct_answer = answer.id|string in item.correct_ids %}
+
+        <div class="
+            {% if is_selected %}selected{% endif %}
+        ">
+            {% if is_correct_answer %}
+                <span class="correct">✔</span>
+            {% else %}
+                <span class="wrong">✖</span>
+            {% endif %}
+
+            {{ answer.text }}
+
+            {% if is_selected %}
+                <strong>(vybral používateľ)</strong>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    {% if item.is_correct %}
+        <p class="correct">Odpoveď správna</p>
+    {% else %}
+        <p class="wrong">Odpoveď nesprávna</p>
+    {% endif %}
+
+</div>
+{% endfor %}
+
+<br>
+<a href="/admin">Späť do admin</a>
+
+</body>
+</html>

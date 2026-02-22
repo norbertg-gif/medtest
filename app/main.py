@@ -4,19 +4,24 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
 from passlib.hash import pbkdf2_sha256
-
-from .database import SessionLocal, engine
-from .models import Base, User, Question, Answer, UserAnswer, Test, TestResult
-
+import os
 import csv
 import io
 import json
 from datetime import datetime
 
+from .database import SessionLocal, engine
+from .models import Base, User, Question, Answer, UserAnswer, Test, TestResult
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="supersecret")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SECRET_KEY", "dev-secret")
+)
+
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -65,7 +70,7 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=302)
 
 
-# ================= ADMIN =================
+# ================= ADMIN DASHBOARD =================
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request, db: Session = Depends(get_db)):
@@ -88,6 +93,27 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         "tests": tests,
         "results": results
     })
+
+
+# ================= CREATE ADMIN (BOOTSTRAP) =================
+
+@app.get("/create-admin")
+def create_admin(db: Session = Depends(get_db)):
+
+    existing = db.query(User).filter(User.username == "admin").first()
+
+    if existing:
+        return {"status": "already exists"}
+
+    db.add(User(
+        username="admin",
+        password_hash=pbkdf2_sha256.hash("admin123"),
+        is_admin=True
+    ))
+
+    db.commit()
+
+    return {"status": "admin created"}
 
 
 # ================= USER MANAGEMENT =================
@@ -124,8 +150,8 @@ def assign_test(user_id: int = Form(...),
                 db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.id == user_id).first()
-
     user.assigned_test_id = test_id
+
     db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
     db.commit()
 
@@ -137,8 +163,8 @@ def unassign_test(user_id: int = Form(...),
                   db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.id == user_id).first()
-
     user.assigned_test_id = None
+
     db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
     db.commit()
 
@@ -151,6 +177,7 @@ def reset_user(user_id: int = Form(...),
 
     db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
     db.commit()
+
     return RedirectResponse("/admin", status_code=302)
 
 
@@ -171,28 +198,22 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         .filter(UserAnswer.user_id == user_id)\
         .all()
 
-    answered = {ua.question_id for ua in user_answers if ua.status == "answered"}
-    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
     existing = {ua.question_id for ua in user_answers}
+    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
 
-    # nové otázky
     for q in questions:
         if q.id not in existing:
             return render_question(q, skipped, request, db)
 
-    # preskočené
     if skipped:
         q = db.query(Question).filter(Question.id == skipped[0]).first()
         return render_question(q, skipped, request, db)
 
-    # archivovať
     return archive_test(user, questions, user_id, db)
 
 
 def render_question(question, skipped, request, db):
-    answers = db.query(Answer)\
-        .filter(Answer.question_id == question.id)\
-        .all()
+    answers = db.query(Answer).filter(Answer.question_id == question.id).all()
 
     return templates.TemplateResponse("question.html", {
         "request": request,
@@ -209,9 +230,7 @@ def archive_test(user, questions, user_id, db):
     snapshot = []
 
     for q in questions:
-        answers = db.query(Answer)\
-            .filter(Answer.question_id == q.id)\
-            .all()
+        answers = db.query(Answer).filter(Answer.question_id == q.id).all()
 
         ua = db.query(UserAnswer).filter(
             UserAnswer.user_id == user_id,
@@ -221,9 +240,9 @@ def archive_test(user, questions, user_id, db):
         selected = json.loads(ua.selected_answers)
 
         correct_ids = [str(a.id) for a in answers if a.is_correct]
-        is_question_correct = set(selected) == set(correct_ids)
+        is_correct = set(selected) == set(correct_ids)
 
-        if is_question_correct:
+        if is_correct:
             correct_count += 1
 
         answers_snapshot = []
@@ -259,7 +278,6 @@ def archive_test(user, questions, user_id, db):
 
     db.query(UserAnswer).filter(UserAnswer.user_id == user.id).delete()
     user.assigned_test_id = None
-
     db.commit()
 
     return HTMLResponse("<h2>Test uložený do archívu.</h2>")
@@ -294,23 +312,21 @@ def submit_answer(request: Request,
             break
 
     if not current and skipped:
-        current = db.query(Question).filter(
-            Question.id == skipped[0]
-        ).first()
+        current = db.query(Question).filter(Question.id == skipped[0]).first()
 
     if action == "next" and not answer_ids:
         return render_question(current, skipped, request, db)
 
     status = "skipped" if action == "skip" else "answered"
 
-    existing_record = db.query(UserAnswer).filter(
+    record = db.query(UserAnswer).filter(
         UserAnswer.user_id == user_id,
         UserAnswer.question_id == current.id
     ).first()
 
-    if existing_record:
-        existing_record.selected_answers = json.dumps(answer_ids)
-        existing_record.status = status
+    if record:
+        record.selected_answers = json.dumps(answer_ids)
+        record.status = status
     else:
         db.add(UserAnswer(
             user_id=user_id,
@@ -349,20 +365,3 @@ def view_result(result_id: int,
         "result": result,
         "snapshot": snapshot
     })
-@app.get("/create-admin")
-def create_admin(db: Session = Depends(get_db)):
-
-    existing = db.query(User).filter(User.username == "admin").first()
-
-    if existing:
-        return {"status": "already exists"}
-
-    db.add(User(
-        username="admin",
-        password_hash=pbkdf2_sha256.hash("admin123"),
-        is_admin=True
-    ))
-
-    db.commit()
-
-    return {"status": "admin created"}

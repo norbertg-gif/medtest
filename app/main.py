@@ -349,3 +349,20 @@ def view_result(result_id: int,
         "result": result,
         "snapshot": snapshot
     })
+@app.get("/create-admin")
+def create_admin(db: Session = Depends(get_db)):
+
+    existing = db.query(User).filter(User.username == "admin").first()
+
+    if existing:
+        return {"status": "already exists"}
+
+    db.add(User(
+        username="admin",
+        password_hash=pbkdf2_sha256.hash("admin123"),
+        is_admin=True
+    ))
+
+    db.commit()
+
+    return {"status": "admin created"}

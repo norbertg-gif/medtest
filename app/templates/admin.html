@@ -108,48 +108,6 @@
 </table>
 </div>
 
-<div class="section">
-<h3>Testy</h3>
-<table>
-<tr>
-    <th>ID</th>
-    <th>Názov</th>
-    <th>Premenovať</th>
-    <th>CSV</th>
-    <th>Otázky</th>
-    <th>Zmazať</th>
-</tr>
-
-{% for t in tests %}
-<tr>
-    <td>{{ t.id }}</td>
-    <td>{{ t.name }}</td>
-
-<td>
-    <form method="post" action="/admin/rename-test">
-        <input type="hidden" name="test_id" value="{{ t.id }}">
-        <input type="text" name="new_name"
-               value="{{ t.name }}"
-               style="width:140px;">
-        <button type="submit">Uložiť</button>
-    </form>
-</td>
-    <td>{{ t.source_csv if t.source_csv else "—" }}</td>
-    <td>{{ t.questions|length }}</td>
-    <td>
-        <form method="post" action="/admin/delete-test">
-            <input type="hidden" name="test_id" value="{{ t.id }}">
-            <button type="submit"
-                onclick="return confirm('Naozaj chcete zmazať tento test?')">
-                Vymazať
-            </button>
-        </form>
-    </td>
-</tr>
-{% endfor %}
-</table>
-</div>
-
 <hr>
 
 <!-- USER MANAGEMENT -->

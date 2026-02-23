@@ -249,3 +249,102 @@ def unassign_test(user_id: int = Form(...),
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)
+
+# ================= TEST FLOW =================
+
+@app.get("/question", response_class=HTMLResponse)
+def get_question(request: Request, db: Session = Depends(get_db)):
+
+    user_id = request.session.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user or not user.assigned_test_id:
+        return RedirectResponse("/", status_code=302)
+
+    questions = db.query(Question)\
+        .filter(Question.test_id == user.assigned_test_id)\
+        .order_by(Question.order_number)\
+        .all()
+
+    user_answers = db.query(UserAnswer)\
+        .filter(UserAnswer.user_id == user_id)\
+        .all()
+
+    existing = {ua.question_id for ua in user_answers}
+    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+
+    for q in questions:
+        if q.id not in existing:
+            return render_question(q, skipped, request, db)
+
+    if skipped:
+        q = db.query(Question).filter(Question.id == skipped[0]).first()
+        return render_question(q, skipped, request, db)
+
+    return archive_test(user, questions, user_id, db)
+
+
+def render_question(question, skipped, request, db):
+    answers = db.query(Answer).filter(Answer.question_id == question.id).all()
+
+    return templates.TemplateResponse("question.html", {
+        "request": request,
+        "question": question,
+        "answers": answers,
+        "skipped": skipped,
+        "error": None
+    })
+
+
+@app.post("/answer")
+def submit_answer(request: Request,
+                  action: str = Form(...),
+                  answer_ids: list[str] = Form([]),
+                  db: Session = Depends(get_db)):
+
+    user_id = request.session.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+
+    questions = db.query(Question)\
+        .filter(Question.test_id == user.assigned_test_id)\
+        .order_by(Question.order_number)\
+        .all()
+
+    user_answers = db.query(UserAnswer)\
+        .filter(UserAnswer.user_id == user_id)\
+        .all()
+
+    existing = {ua.question_id for ua in user_answers}
+    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+
+    current = None
+
+    for q in questions:
+        if q.id not in existing:
+            current = q
+            break
+
+    if not current and skipped:
+        current = db.query(Question).filter(Question.id == skipped[0]).first()
+
+    status = "skipped" if action == "skip" else "answered"
+
+    record = db.query(UserAnswer).filter(
+        UserAnswer.user_id == user_id,
+        UserAnswer.question_id == current.id
+    ).first()
+
+    if record:
+        record.selected_answers = json.dumps(answer_ids)
+        record.status = status
+    else:
+        db.add(UserAnswer(
+            user_id=user_id,
+            question_id=current.id,
+            selected_answers=json.dumps(answer_ids),
+            status=status
+        ))
+
+    db.commit()
+
+    return RedirectResponse("/question", status_code=302)

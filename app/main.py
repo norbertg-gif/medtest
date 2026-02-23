@@ -129,8 +129,7 @@ def create_test(request: Request,
                 name: str = Form(...),
                 db: Session = Depends(get_db)):
 
-    admin = require_admin(request, db)
-    if not admin:
+    if not require_admin(request, db):
         return RedirectResponse("/", status_code=302)
 
     db.add(Test(name=name))
@@ -145,8 +144,7 @@ def import_csv(request: Request,
                file: UploadFile = File(...),
                db: Session = Depends(get_db)):
 
-    admin = require_admin(request, db)
-    if not admin:
+    if not require_admin(request, db):
         return RedirectResponse("/", status_code=302)
 
     test = db.query(Test).filter(Test.id == test_id).first()
@@ -156,6 +154,7 @@ def import_csv(request: Request,
     test.source_csv = file.filename
     db.commit()
 
+    # zmaž staré otázky
     db.query(Answer).filter(
         Answer.question_id.in_(
             db.query(Question.id).filter(Question.test_id == test.id)
@@ -218,6 +217,20 @@ def create_user(username: str = Form(...),
     return RedirectResponse("/admin", status_code=302)
 
 
+@app.post("/admin/delete-result")
+def delete_result(request: Request,
+                  result_id: int = Form(...),
+                  db: Session = Depends(get_db)):
+
+    if not require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    db.query(TestResult).filter(TestResult.id == result_id).delete()
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
 @app.post("/admin/reset-user")
 def reset_user(user_id: int = Form(...),
                db: Session = Depends(get_db)):
@@ -227,34 +240,6 @@ def reset_user(user_id: int = Form(...),
     user = db.query(User).filter(User.id == user_id).first()
     user.has_finished = False
 
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/assign-test")
-def assign_test(user_id: int = Form(...),
-                test_id: int = Form(...),
-                db: Session = Depends(get_db)):
-
-    user = db.query(User).filter(User.id == user_id).first()
-    user.assigned_test_id = test_id
-    user.has_finished = False
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/unassign-test")
-def unassign_test(user_id: int = Form(...),
-                  db: Session = Depends(get_db)):
-
-    user = db.query(User).filter(User.id == user_id).first()
-    user.assigned_test_id = None
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)
@@ -281,29 +266,20 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         .filter(UserAnswer.user_id == user.id)\
         .all()
 
-    answered_ids = {
-        ua.question_id for ua in user_answers
-        if ua.status == "answered"
-    }
+    answered_ids = {ua.question_id for ua in user_answers if ua.status == "answered"}
+    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
 
-    skipped_ids = [
-        ua.question_id for ua in user_answers
-        if ua.status == "skipped"
-    ]
-
-    # 1️⃣ Najprv hľadáme nezodpovedané otázky
+    # nové otázky
     for q in questions:
         if q.id not in answered_ids and q.id not in skipped_ids:
             return render_question(q, skipped_ids, request, db)
 
-    # 2️⃣ Potom vraciame preskočené
+    # preskočené
     if skipped_ids:
-        q = db.query(Question).filter(
-            Question.id == skipped_ids[0]
-        ).first()
+        q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
         return render_question(q, skipped_ids, request, db)
 
-    # 3️⃣ Inak archivujeme
+    # archivuj
     return archive_test(user, questions, db)
 
 
@@ -326,15 +302,8 @@ def submit_answer(request: Request,
         .filter(UserAnswer.user_id == user.id)\
         .all()
 
-    answered_ids = {
-        ua.question_id for ua in user_answers
-        if ua.status == "answered"
-    }
-
-    skipped_ids = [
-        ua.question_id for ua in user_answers
-        if ua.status == "skipped"
-    ]
+    answered_ids = {ua.question_id for ua in user_answers if ua.status == "answered"}
+    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
 
     current = None
 
@@ -351,23 +320,22 @@ def submit_answer(request: Request,
         else:
             return RedirectResponse("/question", status_code=302)
 
-   if action == "next" and not answer_ids:
-    return templates.TemplateResponse(
-        "question.html",
-        {
-            "request": request,
-            "question": current,
-            "answers": db.query(Answer).filter(
-                Answer.question_id == current.id
-            ).all(),
-            "skipped": skipped_ids,
-            "error": "Vyplňte odpoveď alebo použite Preskočiť."
-        }
-    )
+    if action == "next" and not answer_ids:
+        return templates.TemplateResponse(
+            "question.html",
+            {
+                "request": request,
+                "question": current,
+                "answers": db.query(Answer).filter(
+                    Answer.question_id == current.id
+                ).all(),
+                "skipped": skipped_ids,
+                "error": "Vyplňte odpoveď alebo použite Preskočiť."
+            }
+        )
 
     status = "skipped" if action == "skip" else "answered"
 
-    # ak už existuje záznam → update
     existing = db.query(UserAnswer).filter(
         UserAnswer.user_id == user.id,
         UserAnswer.question_id == current.id
@@ -412,11 +380,7 @@ def archive_test(user, questions, db):
         Test.id == user.assigned_test_id
     ).first()
 
-    if not test:
-        return HTMLResponse("<h2>Chyba: test neexistuje.</h2>")
-
     for q in questions:
-
         answers = db.query(Answer).filter(
             Answer.question_id == q.id
         ).all()
@@ -471,50 +435,3 @@ def archive_test(user, questions, db):
     db.commit()
 
     return HTMLResponse("<h2>Test uložený do archívu.</h2>")
-
-# ================= ARCHIVE REVIEW =================
-
-@app.get("/admin/result/{result_id}", response_class=HTMLResponse)
-def review_result(result_id: int,
-                  request: Request,
-                  db: Session = Depends(get_db)):
-
-    admin = require_admin(request, db)
-    if not admin:
-        return RedirectResponse("/", status_code=302)
-
-    result = db.query(TestResult).filter(
-        TestResult.id == result_id
-    ).first()
-
-    if not result:
-        return HTMLResponse("<h2>Výsledok neexistuje.</h2>")
-
-    snapshot = json.loads(result.snapshot)
-
-    return templates.TemplateResponse(
-        "result_review.html",
-        {
-            "request": request,
-            "result": result,
-            "snapshot": snapshot
-        }
-    )
-                      # ================= DELETE ARCHIVED RESULT =================
-
-@app.post("/admin/delete-result")
-def delete_result(request: Request,
-                  result_id: int = Form(...),
-                  db: Session = Depends(get_db)):
-
-    admin = require_admin(request, db)
-    if not admin:
-        return RedirectResponse("/", status_code=302)
-
-    db.query(TestResult).filter(
-        TestResult.id == result_id
-    ).delete()
-
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)

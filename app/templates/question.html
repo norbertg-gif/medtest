@@ -13,6 +13,34 @@
             align-items: flex-start;
         }
 
+        .topbar {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            background: rgba(255,255,255,0.15);
+            padding: 12px 18px;
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            backdrop-filter: blur(8px);
+            text-align: right;
+        }
+
+        .topbar .username {
+            font-weight: bold;
+            font-size: 15px;
+        }
+
+        .topbar .testname {
+            opacity: 0.85;
+        }
+
+        .topbar a {
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
         .container {
             display: flex;
             gap: 30px;
@@ -24,7 +52,7 @@
             flex: 1;
             background: white;
             padding: 30px;
-            border-radius: 12px;
+            border-radius: 14px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.15);
         }
 
@@ -32,7 +60,7 @@
             width: 220px;
             background: white;
             padding: 20px;
-            border-radius: 12px;
+            border-radius: 14px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.15);
         }
 
@@ -43,7 +71,7 @@
         .progress-text {
             font-size: 14px;
             color: #666;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .progress-bar {
@@ -104,7 +132,7 @@
 
         .skipped-number {
             background: #ffeaa7;
-            padding: 5px 8px;
+            padding: 6px 10px;
             border-radius: 6px;
             display: inline-block;
             margin: 3px 0;
@@ -113,25 +141,19 @@
     </style>
 </head>
 <body>
-<div style="
-    position:absolute;
-    top:20px;
-    right:40px;
-    background: rgba(255,255,255,0.15);
-    padding:8px 14px;
-    border-radius:8px;
-    color:white;
-    font-weight:500;
-    backdrop-filter: blur(5px);
-">
-    {{ username }}
-    |
-    <a href="/logout" style="color:white; text-decoration:none;">
-        Odhlásiť
-    </a>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="username">{{ username }}</div>
+    <div class="testname">{{ test_name }}</div>
+    <div>
+        <a href="/logout">Odhlásiť</a>
+    </div>
 </div>
+
 <div class="container">
 
+    <!-- MAIN CARD -->
     <div class="card">
 
         <div class="progress-text">
@@ -140,7 +162,7 @@
 
         <div class="progress-bar">
             <div class="progress-fill"
-                 style="width: {{ (current_number / total_questions) * 100 }}%;">
+                 style="width: {{ ((current_number or 0) / (total_questions or 1)) * 100 }}%;">
             </div>
         </div>
 
@@ -178,6 +200,7 @@
         </form>
     </div>
 
+    <!-- SIDEBAR -->
     <div class="sidebar">
         <strong>Preskočené:</strong><br><br>
 

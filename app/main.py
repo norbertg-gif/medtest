@@ -243,6 +243,58 @@ def reset_user(user_id: int = Form(...),
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)
+                   # ================= ASSIGN / UNASSIGN TEST =================
+
+@app.post("/admin/assign-test")
+def assign_test(request: Request,
+                user_id: int = Form(...),
+                test_id: int = Form(...),
+                db: Session = Depends(get_db)):
+
+    if not require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        return RedirectResponse("/admin", status_code=302)
+
+    user.assigned_test_id = test_id
+    user.has_finished = False
+
+    # vymaž staré odpovede
+    db.query(UserAnswer).filter(
+        UserAnswer.user_id == user_id
+    ).delete()
+
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/unassign-test")
+def unassign_test(request: Request,
+                  user_id: int = Form(...),
+                  db: Session = Depends(get_db)):
+
+    if not require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        return RedirectResponse("/admin", status_code=302)
+
+    user.assigned_test_id = None
+    user.has_finished = False
+
+    db.query(UserAnswer).filter(
+        UserAnswer.user_id == user_id
+    ).delete()
+
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
 
 
 # ================= TEST FLOW =================

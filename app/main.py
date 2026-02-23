@@ -4,8 +4,6 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
 from passlib.hash import pbkdf2_sha256
-from fastapi import Form
-from fastapi.responses import RedirectResponse
 import os
 import csv
 import io
@@ -35,6 +33,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def require_admin(request: Request, db: Session):
+    user = db.query(User).filter(
+        User.id == request.session.get("user_id")
+    ).first()
+
+    if not user or not user.is_admin:
+        return None
+    return user
 
 
 # ================= LOGIN =================
@@ -77,11 +85,8 @@ def logout(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request, db: Session = Depends(get_db)):
 
-    admin = db.query(User).filter(
-        User.id == request.session.get("user_id")
-    ).first()
-
-    if not admin or not admin.is_admin:
+    admin = require_admin(request, db)
+    if not admin:
         return RedirectResponse("/", status_code=302)
 
     users = db.query(User).filter(User.is_admin == False).all()
@@ -97,25 +102,64 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     })
 
 
-# ================= CREATE ADMIN (BOOTSTRAP) =================
+# ================= CREATE TEST =================
 
-@app.get("/create-admin")
-def create_admin(db: Session = Depends(get_db)):
+@app.get("/admin/create-test", response_class=HTMLResponse)
+def create_test_form(request: Request, db: Session = Depends(get_db)):
+    admin = require_admin(request, db)
+    if not admin:
+        return RedirectResponse("/", status_code=302)
 
-    existing = db.query(User).filter(User.username == "admin").first()
+    return templates.TemplateResponse("create_test.html", {"request": request})
 
-    if existing:
-        return {"status": "already exists"}
 
-    db.add(User(
-        username="admin",
-        password_hash=pbkdf2_sha256.hash("admin123"),
-        is_admin=True
-    ))
+@app.post("/admin/create-test")
+def create_test(
+        request: Request,
+        name: str = Form(...),
+        csv_file: UploadFile = File(None),
+        db: Session = Depends(get_db)
+):
+    admin = require_admin(request, db)
+    if not admin:
+        return RedirectResponse("/", status_code=302)
 
+    new_test = Test(name=name)
+    db.add(new_test)
     db.commit()
+    db.refresh(new_test)
 
-    return {"status": "admin created"}
+    # CSV import otázok (voliteľné)
+    if csv_file:
+        content = csv_file.file.read().decode("utf-8")
+        reader = csv.DictReader(io.StringIO(content))
+
+        order = 1
+
+        for row in reader:
+            question = Question(
+                text=row["question"],
+                test_id=new_test.id,
+                order_number=order
+            )
+            db.add(question)
+            db.commit()
+            db.refresh(question)
+
+            answers = json.loads(row["answers"])
+
+            for ans in answers:
+                db.add(Answer(
+                    text=ans["text"],
+                    is_correct=ans["is_correct"],
+                    question_id=question.id
+                ))
+
+            order += 1
+
+        db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
 
 
 # ================= USER MANAGEMENT =================
@@ -191,6 +235,9 @@ def get_question(request: Request, db: Session = Depends(get_db)):
     user_id = request.session.get("user_id")
     user = db.query(User).filter(User.id == user_id).first()
 
+    if not user or not user.assigned_test_id:
+        return RedirectResponse("/", status_code=302)
+
     questions = db.query(Question)\
         .filter(Question.test_id == user.assigned_test_id)\
         .order_by(Question.order_number)\
@@ -212,158 +259,3 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         return render_question(q, skipped, request, db)
 
     return archive_test(user, questions, user_id, db)
-
-
-def render_question(question, skipped, request, db):
-    answers = db.query(Answer).filter(Answer.question_id == question.id).all()
-
-    return templates.TemplateResponse("question.html", {
-        "request": request,
-        "question": question,
-        "answers": answers,
-        "skipped": skipped,
-        "error": None
-    })
-
-
-def archive_test(user, questions, user_id, db):
-
-    correct_count = 0
-    snapshot = []
-
-    for q in questions:
-        answers = db.query(Answer).filter(Answer.question_id == q.id).all()
-
-        ua = db.query(UserAnswer).filter(
-            UserAnswer.user_id == user_id,
-            UserAnswer.question_id == q.id
-        ).first()
-
-        selected = json.loads(ua.selected_answers)
-
-        correct_ids = [str(a.id) for a in answers if a.is_correct]
-        is_correct = set(selected) == set(correct_ids)
-
-        if is_correct:
-            correct_count += 1
-
-        answers_snapshot = []
-
-        for a in answers:
-            answers_snapshot.append({
-                "text": a.text,
-                "is_correct": a.is_correct,
-                "is_selected": str(a.id) in selected
-            })
-
-        snapshot.append({
-            "question": q.text,
-            "answers": answers_snapshot
-        })
-
-    percent = round((correct_count / len(questions)) * 100, 2)
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-
-    test = db.query(Test).filter(Test.id == user.assigned_test_id).first()
-
-    db.add(TestResult(
-        user_id=user.id,
-        username=user.username,
-        test_id=test.id,
-        test_name=test.name,
-        completed_at=timestamp,
-        score_percent=percent,
-        correct_answers=correct_count,
-        total_questions=len(questions),
-        snapshot=json.dumps(snapshot)
-    ))
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user.id).delete()
-    user.assigned_test_id = None
-    db.commit()
-
-    return HTMLResponse("<h2>Test uložený do archívu.</h2>")
-
-
-@app.post("/answer")
-def submit_answer(request: Request,
-                  action: str = Form(...),
-                  answer_ids: list[str] = Form([]),
-                  db: Session = Depends(get_db)):
-
-    user_id = request.session.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-
-    questions = db.query(Question)\
-        .filter(Question.test_id == user.assigned_test_id)\
-        .order_by(Question.order_number)\
-        .all()
-
-    user_answers = db.query(UserAnswer)\
-        .filter(UserAnswer.user_id == user_id)\
-        .all()
-
-    existing = {ua.question_id for ua in user_answers}
-    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
-
-    current = None
-
-    for q in questions:
-        if q.id not in existing:
-            current = q
-            break
-
-    if not current and skipped:
-        current = db.query(Question).filter(Question.id == skipped[0]).first()
-
-    if action == "next" and not answer_ids:
-        return render_question(current, skipped, request, db)
-
-    status = "skipped" if action == "skip" else "answered"
-
-    record = db.query(UserAnswer).filter(
-        UserAnswer.user_id == user_id,
-        UserAnswer.question_id == current.id
-    ).first()
-
-    if record:
-        record.selected_answers = json.dumps(answer_ids)
-        record.status = status
-    else:
-        db.add(UserAnswer(
-            user_id=user_id,
-            question_id=current.id,
-            selected_answers=json.dumps(answer_ids),
-            status=status
-        ))
-
-    db.commit()
-
-    return RedirectResponse("/question", status_code=302)
-
-
-# ================= ARCHIVE REVIEW =================
-
-@app.get("/admin/result/{result_id}", response_class=HTMLResponse)
-def view_result(result_id: int,
-                request: Request,
-                db: Session = Depends(get_db)):
-
-    admin = db.query(User).filter(
-        User.id == request.session.get("user_id")
-    ).first()
-
-    if not admin or not admin.is_admin:
-        return RedirectResponse("/", status_code=302)
-
-    result = db.query(TestResult).filter(
-        TestResult.id == result_id
-    ).first()
-
-    snapshot = json.loads(result.snapshot)
-
-    return templates.TemplateResponse("result_review.html", {
-        "request": request,
-        "result": result,
-        "snapshot": snapshot
-    })

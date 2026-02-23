@@ -320,6 +320,13 @@ def get_question(request: Request, db: Session = Depends(get_db)):
 
     answered_ids = {ua.question_id for ua in user_answers if ua.status == "answered"}
     skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+    # prevod skipped IDs na poradové čísla
+    skipped_orders = []
+
+    for qid in skipped_ids:
+    q = db.query(Question).filter(Question.id == qid).first()
+    if q:
+        skipped_orders.append(q.order_number)
 
     # nové otázky
     for q in questions:
@@ -329,7 +336,7 @@ def get_question(request: Request, db: Session = Depends(get_db)):
     # preskočené
     if skipped_ids:
         q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
-        return render_question(q, skipped_ids, request, db)
+        return render_question(q, skipped_orders, request, db)
 
     # archivuj
     return archive_test(user, questions, db)

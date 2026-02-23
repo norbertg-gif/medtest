@@ -80,6 +80,26 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=302)
 
 
+# ================= CREATE ADMIN =================
+
+@app.get("/create-admin")
+def create_admin(db: Session = Depends(get_db)):
+
+    existing = db.query(User).filter(User.username == "admin").first()
+
+    if existing:
+        return {"status": "already exists"}
+
+    db.add(User(
+        username="admin",
+        password_hash=pbkdf2_sha256.hash("admin123"),
+        is_admin=True
+    ))
+    db.commit()
+
+    return {"status": "admin created"}
+
+
 # ================= ADMIN DASHBOARD =================
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -100,26 +120,6 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         "tests": tests,
         "results": results
     })
-
-
-# ================= CREATE ADMIN =================
-
-@app.get("/create-admin")
-def create_admin(db: Session = Depends(get_db)):
-
-    existing = db.query(User).filter(User.username == "admin").first()
-
-    if existing:
-        return {"status": "already exists"}
-
-    db.add(User(
-        username="admin",
-        password_hash=pbkdf2_sha256.hash("admin123"),
-        is_admin=True
-    ))
-    db.commit()
-
-    return {"status": "admin created"}
 
 
 # ================= TEST MANAGEMENT =================
@@ -156,7 +156,6 @@ def import_csv(request: Request,
     test.source_csv = file.filename
     db.commit()
 
-    # vymaž staré otázky
     db.query(Answer).filter(
         Answer.question_id.in_(
             db.query(Question.id).filter(Question.test_id == test.id)
@@ -188,7 +187,6 @@ def import_csv(request: Request,
             db.add(question)
             db.commit()
             db.refresh(question)
-
             questions_map[order_number] = question
 
         db.add(Answer(
@@ -299,22 +297,7 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
         return render_question(q, skipped, request, db)
 
-    # archivácia
     return archive_test(user, questions, db)
-
-
-def render_question(question, skipped, request, db):
-    answers = db.query(Answer).filter(
-        Answer.question_id == question.id
-    ).all()
-
-    return templates.TemplateResponse("question.html", {
-        "request": request,
-        "question": question,
-        "answers": answers,
-        "skipped": skipped,
-        "error": None
-    })
 
 
 @app.post("/answer")
@@ -337,12 +320,22 @@ def submit_answer(request: Request,
         .all()
 
     existing = {ua.question_id for ua in user_answers}
+    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
 
     current = None
+
     for q in questions:
         if q.id not in existing:
             current = q
             break
+
+    if not current:
+        if skipped_ids:
+            current = db.query(Question).filter(
+                Question.id == skipped_ids[0]
+            ).first()
+        else:
+            return RedirectResponse("/question", status_code=302)
 
     if action == "next" and not answer_ids:
         return render_question(current, [], request, db)
@@ -361,12 +354,34 @@ def submit_answer(request: Request,
     return RedirectResponse("/question", status_code=302)
 
 
+def render_question(question, skipped, request, db):
+    answers = db.query(Answer).filter(
+        Answer.question_id == question.id
+    ).all()
+
+    return templates.TemplateResponse("question.html", {
+        "request": request,
+        "question": question,
+        "answers": answers,
+        "skipped": skipped,
+        "error": None
+    })
+
+
 def archive_test(user, questions, db):
 
     correct_count = 0
     snapshot = []
 
+    test = db.query(Test).filter(
+        Test.id == user.assigned_test_id
+    ).first()
+
+    if not test:
+        return HTMLResponse("<h2>Chyba: test neexistuje.</h2>")
+
     for q in questions:
+
         answers = db.query(Answer).filter(
             Answer.question_id == q.id
         ).all()
@@ -402,10 +417,8 @@ def archive_test(user, questions, db):
     db.add(TestResult(
         user_id=user.id,
         username=user.username,
-        test_id=user.assigned_test_id,
-        test_name=db.query(Test).filter(
-            Test.id == user.assigned_test_id
-        ).first().name,
+        test_id=test.id,
+        test_name=test.name,
         completed_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         score_percent=percent,
         correct_answers=correct_count,

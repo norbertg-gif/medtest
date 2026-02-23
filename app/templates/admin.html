@@ -252,6 +252,7 @@ button:hover {
             <th>Stav</th>
             <th>Progres</th>
             <th>Test</th>
+            <th>Zmazať</th>
         </tr>
 
         {% for u in users %}
@@ -295,6 +296,15 @@ button:hover {
                     —
                 {% endif %}
             </td>
+            <td>
+    <form method="post" action="/admin/delete-user">
+        <input type="hidden" name="user_id" value="{{ u.id }}">
+        <button class="danger" type="submit"
+            onclick="return confirm('Naozaj chcete zmazať tohto používateľa?')">
+            Vymazať
+        </button>
+    </form>
+</td>
         </tr>
         {% endfor %}
     </table>

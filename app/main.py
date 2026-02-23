@@ -281,22 +281,29 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         .filter(UserAnswer.user_id == user.id)\
         .all()
 
-    existing = {ua.question_id for ua in user_answers}
-    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+    answered_ids = {
+        ua.question_id for ua in user_answers
+        if ua.status == "answered"
+    }
 
-    skipped = [
-        db.query(Question).filter(Question.id == qid).first().order_number
-        for qid in skipped_ids
+    skipped_ids = [
+        ua.question_id for ua in user_answers
+        if ua.status == "skipped"
     ]
 
+    # 1️⃣ Najprv hľadáme nezodpovedané otázky
     for q in questions:
-        if q.id not in existing:
-            return render_question(q, skipped, request, db)
+        if q.id not in answered_ids and q.id not in skipped_ids:
+            return render_question(q, skipped_ids, request, db)
 
+    # 2️⃣ Potom vraciame preskočené
     if skipped_ids:
-        q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
-        return render_question(q, skipped, request, db)
+        q = db.query(Question).filter(
+            Question.id == skipped_ids[0]
+        ).first()
+        return render_question(q, skipped_ids, request, db)
 
+    # 3️⃣ Inak archivujeme
     return archive_test(user, questions, db)
 
 
@@ -319,13 +326,20 @@ def submit_answer(request: Request,
         .filter(UserAnswer.user_id == user.id)\
         .all()
 
-    existing = {ua.question_id for ua in user_answers}
-    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+    answered_ids = {
+        ua.question_id for ua in user_answers
+        if ua.status == "answered"
+    }
+
+    skipped_ids = [
+        ua.question_id for ua in user_answers
+        if ua.status == "skipped"
+    ]
 
     current = None
 
     for q in questions:
-        if q.id not in existing:
+        if q.id not in answered_ids and q.id not in skipped_ids:
             current = q
             break
 
@@ -338,16 +352,26 @@ def submit_answer(request: Request,
             return RedirectResponse("/question", status_code=302)
 
     if action == "next" and not answer_ids:
-        return render_question(current, [], request, db)
+        return render_question(current, skipped_ids, request, db)
 
     status = "skipped" if action == "skip" else "answered"
 
-    db.add(UserAnswer(
-        user_id=user.id,
-        question_id=current.id,
-        selected_answers=json.dumps(answer_ids),
-        status=status
-    ))
+    # ak už existuje záznam → update
+    existing = db.query(UserAnswer).filter(
+        UserAnswer.user_id == user.id,
+        UserAnswer.question_id == current.id
+    ).first()
+
+    if existing:
+        existing.selected_answers = json.dumps(answer_ids)
+        existing.status = status
+    else:
+        db.add(UserAnswer(
+            user_id=user.id,
+            question_id=current.id,
+            selected_answers=json.dumps(answer_ids),
+            status=status
+        ))
 
     db.commit()
 

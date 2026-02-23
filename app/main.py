@@ -336,7 +336,36 @@ def unassign_test(request: Request,
 
     return RedirectResponse("/admin", status_code=302)
 
+# ================= DELETE USER =================
 
+@app.post("/admin/delete-user")
+def delete_user(request: Request,
+                user_id: int = Form(...),
+                db: Session = Depends(get_db)):
+
+    if not require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        return RedirectResponse("/admin", status_code=302)
+
+    # vymažeme jeho odpovede
+    db.query(UserAnswer).filter(
+        UserAnswer.user_id == user.id
+    ).delete()
+
+    # vymažeme jeho výsledky v archíve
+    db.query(TestResult).filter(
+        TestResult.user_id == user.id
+    ).delete()
+
+    # zmažeme používateľa
+    db.delete(user)
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
 # ================= TEST FLOW =================
 
 @app.get("/question", response_class=HTMLResponse)

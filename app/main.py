@@ -110,39 +110,37 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/", status_code=302)
 
     users = db.query(User).filter(User.is_admin == False).all()
-    # vypočítame progres pre každého usera
-user_progress = {}
-
-for u in users:
-    if u.assigned_test_id:
-        total_questions = db.query(Question).filter(
-            Question.test_id == u.assigned_test_id
-        ).count()
-
-        answered_count = db.query(UserAnswer).filter(
-            UserAnswer.user_id == u.id,
-            UserAnswer.status == "answered"
-        ).count()
-
-        user_progress[u.id] = {
-            "answered": answered_count,
-            "total": total_questions
-        }
-    else:
-        user_progress[u.id] = None
     tests = db.query(Test).all()
     results = db.query(TestResult).order_by(TestResult.id.desc()).all()
 
+    user_progress = {}
+
+    for u in users:
+        if u.assigned_test_id:
+            total_questions = db.query(Question).filter(
+                Question.test_id == u.assigned_test_id
+            ).count()
+
+            answered_count = db.query(UserAnswer).filter(
+                UserAnswer.user_id == u.id,
+                UserAnswer.status == "answered"
+            ).count()
+
+            user_progress[u.id] = {
+                "answered": answered_count,
+                "total": total_questions
+            }
+        else:
+            user_progress[u.id] = None
+
     return templates.TemplateResponse("admin.html", {
-    "request": request,
-    "admin": admin,
-    "users": users,
-    "tests": tests,
-    "results": results,
-    "user_progress": user_progress
-})
-
-
+        "request": request,
+        "admin": admin,
+        "users": users,
+        "tests": tests,
+        "results": results,
+        "user_progress": user_progress
+    })
 # ================= TEST MANAGEMENT =================
 
 @app.post("/admin/create-test")

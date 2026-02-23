@@ -39,7 +39,6 @@ def require_admin(request: Request, db: Session):
     user = db.query(User).filter(
         User.id == request.session.get("user_id")
     ).first()
-
     if not user or not user.is_admin:
         return None
     return user
@@ -119,7 +118,7 @@ def create_test(request: Request,
     return RedirectResponse("/admin", status_code=302)
 
 
-# ================= IMPORT CSV =================
+# ================= IMPORT CSV (TVÔJ FORMÁT) =================
 
 @app.post("/admin/import")
 def import_csv(request: Request,
@@ -160,12 +159,10 @@ def import_csv(request: Request,
 
             questions_map[order_number] = question
 
-        question = questions_map[order_number]
-
         db.add(Answer(
             text=answer_text,
             is_correct=is_correct,
-            question_id=question.id
+            question_id=questions_map[order_number].id
         ))
 
     db.commit()
@@ -193,6 +190,62 @@ def delete_test(request: Request,
     db.query(Question).filter(Question.test_id == test_id).delete()
     db.query(Test).filter(Test.id == test_id).delete()
 
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+# ================= USER MANAGEMENT =================
+
+@app.post("/admin/create-user")
+def create_user_admin(username: str = Form(...),
+                      password: str = Form(...),
+                      db: Session = Depends(get_db)):
+
+    if not db.query(User).filter(User.username == username).first():
+        db.add(User(
+            username=username,
+            password_hash=pbkdf2_sha256.hash(password),
+            is_admin=False
+        ))
+        db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/delete-user")
+def delete_user_admin(user_id: int = Form(...),
+                      db: Session = Depends(get_db)):
+
+    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
+    db.delete(db.query(User).filter(User.id == user_id).first())
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/assign-test")
+def assign_test(user_id: int = Form(...),
+                test_id: int = Form(...),
+                db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user.assigned_test_id = test_id
+
+    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/unassign-test")
+def unassign_test(user_id: int = Form(...),
+                  db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user.assigned_test_id = None
+
+    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)

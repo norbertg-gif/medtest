@@ -5,9 +5,7 @@
 
 <style>
 :root {
-    --bg: #f4f6fb;
-    --sidebar: #1e2235;
-    --sidebar-text: #ffffff;
+    --bg: linear-gradient(135deg, #f6f8ff, #eef1ff);
     --card: #ffffff;
     --text: #1a1a1a;
     --muted: #666;
@@ -19,9 +17,7 @@
 }
 
 [data-theme="dark"] {
-    --bg: #141622;
-    --sidebar: #0f1120;
-    --sidebar-text: #dcdfff;
+    --bg: linear-gradient(135deg, #141622, #1c2035);
     --card: #1f2338;
     --text: #f0f0f0;
     --muted: #aaa;
@@ -33,50 +29,35 @@
 }
 
 body {
-    margin: 0;
     font-family: "Segoe UI", Arial, sans-serif;
+    margin: 0;
+    padding: 40px;
     background: var(--bg);
     color: var(--text);
-    display: flex;
-    min-height: 100vh;
+    transition: 0.3s;
 }
 
-/* SIDEBAR */
-
-.sidebar {
-    width: 240px;
-    background: var(--sidebar);
-    color: var(--sidebar-text);
-    padding: 30px 20px;
-}
-
-.sidebar h2 {
+h2, h3 {
     margin-top: 0;
-    font-size: 20px;
 }
 
-.sidebar small {
-    opacity: 0.6;
-}
-
-/* MAIN */
-
-.main {
-    flex: 1;
-    padding: 30px 40px;
-}
-
-.topbar {
+.header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
 }
 
-.topbar-right {
+.header-right {
     display: flex;
-    align-items: center;
     gap: 15px;
+    align-items: center;
+}
+
+.logout {
+    text-decoration: none;
+    font-weight: 500;
+    color: var(--primary);
 }
 
 .theme-toggle {
@@ -88,21 +69,19 @@ body {
     color: white;
 }
 
-/* CARD */
-
-.card {
+.section {
     background: var(--card);
-    border-radius: 14px;
     padding: 25px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    border-radius: 16px;
     margin-bottom: 30px;
+    box-shadow: 0 15px 30px rgba(0,0,0,0.08);
+    transition: 0.3s;
 }
-
-/* TABLE */
 
 table {
     width: 100%;
     border-collapse: collapse;
+    margin-top: 15px;
 }
 
 th {
@@ -121,12 +100,11 @@ tr:hover {
     background: rgba(0,0,0,0.03);
 }
 
-/* FORM ELEMENTS */
-
 input, select {
     padding: 6px 8px;
     border-radius: 8px;
     border: 1px solid var(--border);
+    font-size: 14px;
     background: transparent;
     color: var(--text);
 }
@@ -136,8 +114,10 @@ button {
     border-radius: 8px;
     border: none;
     cursor: pointer;
+    font-weight: 500;
     background: var(--primary);
     color: white;
+    transition: 0.2s;
 }
 
 button:hover {
@@ -152,19 +132,15 @@ button:hover {
     background: var(--danger-hover);
 }
 
-/* STATUS */
-
 .status-finished {
     color: #2ecc71;
-    font-weight: 600;
+    font-weight: bold;
 }
 
 .status-active {
     color: #f39c12;
-    font-weight: 600;
+    font-weight: bold;
 }
-
-/* PROGRESS */
 
 .progress-bar {
     height: 6px;
@@ -183,164 +159,172 @@ button:hover {
 
 <body>
 
-<div class="sidebar">
-    <h2>MedTest</h2>
-    <small>Admin rozhranie</small>
-</div>
+<div class="header">
+    <h2>Admin panel</h2>
 
-<div class="main">
-
-    <div class="topbar">
+    <div class="header-right">
         <div>
             Prihlásený: <strong>{{ admin.username }}</strong> |
-            <a href="/logout">Odhlásiť</a>
+            <a class="logout" href="/logout">Odhlásiť</a>
         </div>
 
-        <div class="topbar-right">
-            <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
-        </div>
+        <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
     </div>
+</div>
 
-    <!-- TEST MANAGEMENT -->
-    <div class="card">
-        <h3>Testy</h3>
+<!-- TEST MANAGEMENT -->
+<div class="section">
+    <h3>Testy</h3>
 
-        <form method="post" action="/admin/create-test">
-            <input type="text" name="name" placeholder="Názov testu" required>
-            <button type="submit">Vytvoriť test</button>
-        </form>
+    <!-- CREATE TEST -->
+    <form method="post" action="/admin/create-test">
+        <input type="text" name="name" placeholder="Názov testu" required>
+        <button type="submit">Vytvoriť test</button>
+    </form>
 
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Názov</th>
-                <th>CSV</th>
-                <th>Otázky</th>
-                <th>Premenovať</th>
-                <th>Zmazať</th>
-            </tr>
+    <br>
 
+    <!-- IMPORT CSV -->
+    <form method="post" action="/admin/import" enctype="multipart/form-data">
+        <select name="test_id" required>
             {% for t in tests %}
-            <tr>
-                <td>{{ t.id }}</td>
-                <td>{{ t.name }}</td>
-                <td>{{ t.source_csv if t.source_csv else "—" }}</td>
-                <td>{{ t.questions|length }}</td>
-
-                <td>
-                    <form method="post" action="/admin/rename-test">
-                        <input type="hidden" name="test_id" value="{{ t.id }}">
-                        <input type="text" name="new_name" value="{{ t.name }}">
-                        <button type="submit">Uložiť</button>
-                    </form>
-                </td>
-
-                <td>
-                    <form method="post" action="/admin/delete-test">
-                        <input type="hidden" name="test_id" value="{{ t.id }}">
-                        <button class="danger" type="submit"
-                            onclick="return confirm('Naozaj chcete zmazať tento test?')">
-                            Vymazať
-                        </button>
-                    </form>
-                </td>
-            </tr>
+                <option value="{{ t.id }}">{{ t.name }}</option>
             {% endfor %}
-        </table>
-    </div>
+        </select>
 
-    <!-- USER MANAGEMENT -->
-    <div class="card">
-        <h3>Používatelia</h3>
+        <input type="file" name="file" accept=".csv" required>
+        <button type="submit">Importovať CSV</button>
+    </form>
 
-        <form method="post" action="/admin/create-user">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Heslo" required>
-            <button type="submit">Vytvoriť používateľa</button>
-        </form>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Názov</th>
+            <th>CSV</th>
+            <th>Otázky</th>
+            <th>Premenovať</th>
+            <th>Zmazať</th>
+        </tr>
 
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Stav</th>
-                <th>Progres</th>
-                <th>Test</th>
-            </tr>
+        {% for t in tests %}
+        <tr>
+            <td>{{ t.id }}</td>
+            <td>{{ t.name }}</td>
+            <td>{{ t.source_csv if t.source_csv else "—" }}</td>
+            <td>{{ t.questions|length }}</td>
 
-            {% for u in users %}
-            <tr>
-                <td>{{ u.id }}</td>
-                <td>{{ u.username }}</td>
+            <td>
+                <form method="post" action="/admin/rename-test">
+                    <input type="hidden" name="test_id" value="{{ t.id }}">
+                    <input type="text" name="new_name" value="{{ t.name }}">
+                    <button type="submit">Uložiť</button>
+                </form>
+            </td>
 
-                <td>
-                    {% if u.has_finished %}
-                        <span class="status-finished">Ukončený</span>
-                    {% elif u.assigned_test_id %}
-                        <span class="status-active">Rozpracovaný</span>
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
+            <td>
+                <form method="post" action="/admin/delete-test">
+                    <input type="hidden" name="test_id" value="{{ t.id }}">
+                    <button class="danger" type="submit"
+                        onclick="return confirm('Naozaj chcete zmazať tento test?')">
+                        Vymazať
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 
-                <td>
-                    {% if user_progress[u.id] %}
-                        {{ user_progress[u.id].answered }} /
-                        {{ user_progress[u.id].total }}
+<!-- USER MANAGEMENT -->
+<div class="section">
+    <h3>Používatelia</h3>
 
-                        <div class="progress-bar">
-                            <div class="progress-fill"
-                                 style="width: {{ (user_progress[u.id].answered / user_progress[u.id].total) * 100 }}%;">
-                            </div>
+    <form method="post" action="/admin/create-user">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Heslo" required>
+        <button type="submit">Vytvoriť používateľa</button>
+    </form>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Stav</th>
+            <th>Progres</th>
+            <th>Test</th>
+        </tr>
+
+        {% for u in users %}
+        <tr>
+            <td>{{ u.id }}</td>
+            <td>{{ u.username }}</td>
+
+            <td>
+                {% if u.has_finished %}
+                    <span class="status-finished">Ukončený</span>
+                {% elif u.assigned_test_id %}
+                    <span class="status-active">Rozpracovaný</span>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+
+            <td>
+                {% if user_progress[u.id] %}
+                    {{ user_progress[u.id].answered }} /
+                    {{ user_progress[u.id].total }}
+
+                    <div class="progress-bar">
+                        <div class="progress-fill"
+                             style="width: {{ (user_progress[u.id].answered / user_progress[u.id].total) * 100 }}%;">
                         </div>
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
+                    </div>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
 
-                <td>
-                    {% if u.assigned_test_id %}
-                        {% for t in tests %}
-                            {% if t.id == u.assigned_test_id %}
-                                {{ t.name }}
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
+            <td>
+                {% if u.assigned_test_id %}
+                    {% for t in tests %}
+                        {% if t.id == u.assigned_test_id %}
+                            {{ t.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 
-    <!-- ARCHIVE -->
-    <div class="card">
-        <h3>Archivované testy</h3>
+<!-- ARCHIVE -->
+<div class="section">
+    <h3>Archivované testy</h3>
 
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>Test</th>
-                <th>Skóre</th>
-                <th>Dátum</th>
-                <th></th>
-            </tr>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Test</th>
+            <th>Skóre</th>
+            <th>Dátum</th>
+            <th></th>
+        </tr>
 
-            {% for r in results %}
-            <tr>
-                <td>{{ r.id }}</td>
-                <td>{{ r.username }} – {{ r.test_name }}</td>
-                <td>{{ r.score_percent }} %</td>
-                <td>{{ r.completed_at }}</td>
-                <td>
-                    <a href="/admin/result/{{ r.id }}">Review</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
-
+        {% for r in results %}
+        <tr>
+            <td>{{ r.id }}</td>
+            <td>{{ r.username }} – {{ r.test_name }}</td>
+            <td>{{ r.score_percent }} %</td>
+            <td>{{ r.completed_at }}</td>
+            <td>
+                <a href="/admin/result/{{ r.id }}">Review</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
 </div>
 
 <script>

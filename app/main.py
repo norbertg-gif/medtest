@@ -407,11 +407,11 @@ def submit_answer(request: Request,
         else:
             return RedirectResponse("/question", status_code=302)
 
-if action == "next" and not answer_ids:
+    if action == "next" and not answer_ids:
 
-    total_questions = len(questions)
+        total_questions = len(questions)
 
-    return render_question(
+        return render_question(
         current,
         skipped_ids,
         request,

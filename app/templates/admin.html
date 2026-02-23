@@ -5,11 +5,11 @@
 
     <style>
         :root {
-            --bg-gradient: linear-gradient(135deg, #f6f8ff, #eef1ff);
-            --card-bg: white;
+            --bg: linear-gradient(135deg, #f6f8ff, #eef1ff);
+            --card: #ffffff;
             --text: #222;
             --muted: #777;
-            --border: #f0f0f0;
+            --border: #eee;
             --primary: #4f73ff;
             --primary-hover: #3d5fe0;
             --danger: #ff6b6b;
@@ -17,8 +17,8 @@
         }
 
         [data-theme="dark"] {
-            --bg-gradient: linear-gradient(135deg, #1f2235, #2b2f4a);
-            --card-bg: #2f3354;
+            --bg: linear-gradient(135deg, #1f2235, #2b2f4a);
+            --card: #2f3354;
             --text: #f0f0f0;
             --muted: #bbb;
             --border: #3c4060;
@@ -32,7 +32,7 @@
             font-family: "Segoe UI", Arial, sans-serif;
             margin: 0;
             padding: 40px;
-            background: var(--bg-gradient);
+            background: var(--bg);
             color: var(--text);
             transition: 0.3s;
         }
@@ -46,7 +46,7 @@
 
         .theme-toggle {
             cursor: pointer;
-            padding: 6px 12px;
+            padding: 8px 14px;
             border-radius: 8px;
             border: none;
             background: var(--primary);
@@ -59,7 +59,7 @@
         }
 
         .section {
-            background: var(--card-bg);
+            background: var(--card);
             padding: 25px;
             border-radius: 16px;
             margin-bottom: 30px;
@@ -129,6 +129,20 @@
             color: #f39c12;
             font-weight: bold;
         }
+
+        .progress-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+        }
+
     </style>
 </head>
 <body>
@@ -136,17 +150,73 @@
 <div class="header">
     <div>
         <h2>Admin panel</h2>
-        Prihlásený: <strong>{{ admin.username }}</strong>
-        |
+        Prihlásený: <strong>{{ admin.username }}</strong> |
         <a href="/logout">Odhlásiť</a>
     </div>
 
-    <button class="theme-toggle" onclick="toggleTheme()">
-        🌙 Dark mode
-    </button>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark mode</button>
 </div>
 
-<!-- obsah necháš rovnaký ako máš teraz -->
+
+<!-- USER SECTION -->
+<div class="section">
+    <h3>Používatelia</h3>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Stav</th>
+            <th>Progres</th>
+            <th>Test</th>
+        </tr>
+
+        {% for u in users %}
+        <tr>
+            <td>{{ u.id }}</td>
+            <td>{{ u.username }}</td>
+
+            <td>
+                {% if u.has_finished %}
+                    <span class="status-finished">Ukončený</span>
+                {% elif u.assigned_test_id %}
+                    <span class="status-active">Rozpracovaný</span>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+
+            <td>
+                {% if user_progress[u.id] %}
+                    {{ user_progress[u.id].answered }} /
+                    {{ user_progress[u.id].total }}
+
+                    <div class="progress-bar">
+                        <div class="progress-fill"
+                             style="width: {{ (user_progress[u.id].answered / user_progress[u.id].total) * 100 }}%;">
+                        </div>
+                    </div>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+
+            <td>
+                {% if u.assigned_test_id %}
+                    {% for t in tests %}
+                        {% if t.id == u.assigned_test_id %}
+                            {{ t.name }}
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
 
 <script>
     const html = document.documentElement;
@@ -158,7 +228,6 @@
         localStorage.setItem("adminTheme", next);
     }
 
-    // načítanie uloženého módu
     const savedTheme = localStorage.getItem("adminTheme");
     if (savedTheme) {
         html.setAttribute("data-theme", savedTheme);

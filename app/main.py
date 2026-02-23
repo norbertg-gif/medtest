@@ -113,8 +113,7 @@ def create_test(request: Request,
     if not admin:
         return RedirectResponse("/", status_code=302)
 
-    new_test = Test(name=name)
-    db.add(new_test)
+    db.add(Test(name=name))
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)
@@ -136,31 +135,38 @@ def import_csv(request: Request,
     if not test:
         return RedirectResponse("/admin", status_code=302)
 
-    content = file.file.read().decode("utf-8")
-    reader = csv.DictReader(io.StringIO(content))
+    content = file.file.read().decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(content), delimiter=";")
 
-    order = 1
+    questions_map = {}
 
     for row in reader:
-        question = Question(
-            text=row["question"],
-            test_id=test.id,
-            order_number=order
-        )
-        db.add(question)
-        db.commit()
-        db.refresh(question)
+        order_number = int(row["order_number"])
+        question_text = row["question_text"]
+        multiple_allowed = bool(int(row["multiple_allowed"]))
+        answer_text = row["answer_text"]
+        is_correct = bool(int(row["is_correct"]))
 
-        answers = json.loads(row["answers"])
+        if order_number not in questions_map:
+            question = Question(
+                text=question_text,
+                test_id=test.id,
+                order_number=order_number,
+                multiple_allowed=multiple_allowed
+            )
+            db.add(question)
+            db.commit()
+            db.refresh(question)
 
-        for ans in answers:
-            db.add(Answer(
-                text=ans["text"],
-                is_correct=ans["is_correct"],
-                question_id=question.id
-            ))
+            questions_map[order_number] = question
 
-        order += 1
+        question = questions_map[order_number]
+
+        db.add(Answer(
+            text=answer_text,
+            is_correct=is_correct,
+            question_id=question.id
+        ))
 
     db.commit()
 

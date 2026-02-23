@@ -100,7 +100,9 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         "tests": tests,
         "results": results
     })
-# ================= CREATE ADMIN (BOOTSTRAP) =================
+
+
+# ================= CREATE ADMIN =================
 
 @app.get("/create-admin")
 def create_admin(db: Session = Depends(get_db)):
@@ -115,12 +117,12 @@ def create_admin(db: Session = Depends(get_db)):
         password_hash=pbkdf2_sha256.hash("admin123"),
         is_admin=True
     ))
-
     db.commit()
 
     return {"status": "admin created"}
 
-# ================= CREATE TEST =================
+
+# ================= TEST MANAGEMENT =================
 
 @app.post("/admin/create-test")
 def create_test(request: Request,
@@ -137,8 +139,6 @@ def create_test(request: Request,
     return RedirectResponse("/admin", status_code=302)
 
 
-# ================= IMPORT CSV =================
-
 @app.post("/admin/import")
 def import_csv(request: Request,
                test_id: int = Form(...),
@@ -153,11 +153,10 @@ def import_csv(request: Request,
     if not test:
         return RedirectResponse("/admin", status_code=302)
 
-    # zapíš názov CSV
     test.source_csv = file.filename
     db.commit()
 
-    # zmaž staré otázky testu
+    # vymaž staré otázky
     db.query(Answer).filter(
         Answer.question_id.in_(
             db.query(Question.id).filter(Question.test_id == test.id)
@@ -203,111 +202,12 @@ def import_csv(request: Request,
     return RedirectResponse("/admin", status_code=302)
 
 
-# ================= TEST FLOW =================
-
-@app.get("/question", response_class=HTMLResponse)
-def get_question(request: Request, db: Session = Depends(get_db)):
-
-    user_id = request.session.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user or not user.assigned_test_id:
-        return RedirectResponse("/", status_code=302)
-
-    questions = db.query(Question)\
-        .filter(Question.test_id == user.assigned_test_id)\
-        .order_by(Question.order_number)\
-        .all()
-
-    user_answers = db.query(UserAnswer)\
-        .filter(UserAnswer.user_id == user_id)\
-        .all()
-
-    existing = {ua.question_id for ua in user_answers}
-    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
-
-    skipped = [
-        db.query(Question).filter(Question.id == qid).first().order_number
-        for qid in skipped_ids
-    ]
-
-    for q in questions:
-        if q.id not in existing:
-            return render_question(q, skipped, request, db)
-
-    if skipped_ids:
-        q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
-        return render_question(q, skipped, request, db)
-
-    return HTMLResponse("<h2>Test dokončený.</h2>")
-
-
-def render_question(question, skipped, request, db):
-    answers = db.query(Answer).filter(Answer.question_id == question.id).all()
-
-    return templates.TemplateResponse("question.html", {
-        "request": request,
-        "question": question,
-        "answers": answers,
-        "skipped": skipped,
-        "error": None
-    })
-
-
-@app.post("/answer")
-def submit_answer(request: Request,
-                  action: str = Form(...),
-                  answer_ids: List[str] = Form(default=[]),
-                  db: Session = Depends(get_db)):
-
-    user_id = request.session.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-
-    questions = db.query(Question)\
-        .filter(Question.test_id == user.assigned_test_id)\
-        .order_by(Question.order_number)\
-        .all()
-
-    user_answers = db.query(UserAnswer)\
-        .filter(UserAnswer.user_id == user_id)\
-        .all()
-
-    existing = {ua.question_id for ua in user_answers}
-
-    current = None
-    for q in questions:
-        if q.id not in existing:
-            current = q
-            break
-
-    status = "skipped" if action == "skip" else "answered"
-
-    record = db.query(UserAnswer).filter(
-        UserAnswer.user_id == user_id,
-        UserAnswer.question_id == current.id
-    ).first()
-
-    if record:
-        record.selected_answers = json.dumps(answer_ids)
-        record.status = status
-    else:
-        db.add(UserAnswer(
-            user_id=user_id,
-            question_id=current.id,
-            selected_answers=json.dumps(answer_ids),
-            status=status
-        ))
-
-    db.commit()
-
-    return RedirectResponse("/question", status_code=302)
-
 # ================= USER MANAGEMENT =================
 
 @app.post("/admin/create-user")
-def create_user_admin(username: str = Form(...),
-                      password: str = Form(...),
-                      db: Session = Depends(get_db)):
+def create_user(username: str = Form(...),
+                password: str = Form(...),
+                db: Session = Depends(get_db)):
 
     if not db.query(User).filter(User.username == username).first():
         db.add(User(
@@ -320,12 +220,15 @@ def create_user_admin(username: str = Form(...),
     return RedirectResponse("/admin", status_code=302)
 
 
-@app.post("/admin/delete-user")
-def delete_user_admin(user_id: int = Form(...),
-                      db: Session = Depends(get_db)):
+@app.post("/admin/reset-user")
+def reset_user(user_id: int = Form(...),
+               db: Session = Depends(get_db)):
 
     db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.delete(db.query(User).filter(User.id == user_id).first())
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user.has_finished = False
+
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)
@@ -338,6 +241,7 @@ def assign_test(user_id: int = Form(...),
 
     user = db.query(User).filter(User.id == user_id).first()
     user.assigned_test_id = test_id
+    user.has_finished = False
 
     db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
     db.commit()
@@ -357,19 +261,165 @@ def unassign_test(user_id: int = Form(...),
 
     return RedirectResponse("/admin", status_code=302)
 
-@app.post("/admin/reset-user")
-def reset_user(user_id: int = Form(...),
-               db: Session = Depends(get_db)):
 
-    # vymaž odpovede používateľa
-    db.query(UserAnswer).filter(
-        UserAnswer.user_id == user_id
-    ).delete()
+# ================= TEST FLOW =================
 
-    # nastav že test ešte nie je dokončený
-    user = db.query(User).filter(User.id == user_id).first()
-    user.has_finished = False
+@app.get("/question", response_class=HTMLResponse)
+def get_question(request: Request, db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(
+        User.id == request.session.get("user_id")
+    ).first()
+
+    if not user or not user.assigned_test_id:
+        return RedirectResponse("/", status_code=302)
+
+    questions = db.query(Question)\
+        .filter(Question.test_id == user.assigned_test_id)\
+        .order_by(Question.order_number)\
+        .all()
+
+    user_answers = db.query(UserAnswer)\
+        .filter(UserAnswer.user_id == user.id)\
+        .all()
+
+    existing = {ua.question_id for ua in user_answers}
+    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+
+    skipped = [
+        db.query(Question).filter(Question.id == qid).first().order_number
+        for qid in skipped_ids
+    ]
+
+    for q in questions:
+        if q.id not in existing:
+            return render_question(q, skipped, request, db)
+
+    if skipped_ids:
+        q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
+        return render_question(q, skipped, request, db)
+
+    # archivácia
+    return archive_test(user, questions, db)
+
+
+def render_question(question, skipped, request, db):
+    answers = db.query(Answer).filter(
+        Answer.question_id == question.id
+    ).all()
+
+    return templates.TemplateResponse("question.html", {
+        "request": request,
+        "question": question,
+        "answers": answers,
+        "skipped": skipped,
+        "error": None
+    })
+
+
+@app.post("/answer")
+def submit_answer(request: Request,
+                  action: str = Form(...),
+                  answer_ids: List[str] = Form(default=[]),
+                  db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(
+        User.id == request.session.get("user_id")
+    ).first()
+
+    questions = db.query(Question)\
+        .filter(Question.test_id == user.assigned_test_id)\
+        .order_by(Question.order_number)\
+        .all()
+
+    user_answers = db.query(UserAnswer)\
+        .filter(UserAnswer.user_id == user.id)\
+        .all()
+
+    existing = {ua.question_id for ua in user_answers}
+
+    current = None
+    for q in questions:
+        if q.id not in existing:
+            current = q
+            break
+
+    if action == "next" and not answer_ids:
+        return render_question(current, [], request, db)
+
+    status = "skipped" if action == "skip" else "answered"
+
+    db.add(UserAnswer(
+        user_id=user.id,
+        question_id=current.id,
+        selected_answers=json.dumps(answer_ids),
+        status=status
+    ))
 
     db.commit()
 
-    return RedirectResponse("/admin", status_code=302)
+    return RedirectResponse("/question", status_code=302)
+
+
+def archive_test(user, questions, db):
+
+    correct_count = 0
+    snapshot = []
+
+    for q in questions:
+        answers = db.query(Answer).filter(
+            Answer.question_id == q.id
+        ).all()
+
+        ua = db.query(UserAnswer).filter(
+            UserAnswer.user_id == user.id,
+            UserAnswer.question_id == q.id
+        ).first()
+
+        selected = json.loads(ua.selected_answers) if ua else []
+
+        correct_ids = [str(a.id) for a in answers if a.is_correct]
+        is_correct = set(selected) == set(correct_ids)
+
+        if is_correct:
+            correct_count += 1
+
+        answers_snapshot = []
+        for a in answers:
+            answers_snapshot.append({
+                "text": a.text,
+                "is_correct": a.is_correct,
+                "is_selected": str(a.id) in selected
+            })
+
+        snapshot.append({
+            "question": q.text,
+            "answers": answers_snapshot
+        })
+
+    percent = round((correct_count / len(questions)) * 100, 2)
+
+    db.add(TestResult(
+        user_id=user.id,
+        username=user.username,
+        test_id=user.assigned_test_id,
+        test_name=db.query(Test).filter(
+            Test.id == user.assigned_test_id
+        ).first().name,
+        completed_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        score_percent=percent,
+        correct_answers=correct_count,
+        total_questions=len(questions),
+        snapshot=json.dumps(snapshot)
+    ))
+
+    user.has_finished = True
+    user.assigned_test_id = None
+
+    db.query(UserAnswer).filter(
+        UserAnswer.user_id == user.id
+    ).delete()
+
+    db.commit()
+
+    return HTMLResponse("<h2>Test uložený do archívu.</h2>")

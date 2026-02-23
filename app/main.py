@@ -408,18 +408,18 @@ def submit_answer(request: Request,
             return RedirectResponse("/question", status_code=302)
 
     if action == "next" and not answer_ids:
-        return templates.TemplateResponse(
-            "question.html",
-            {
-                "request": request,
-                "question": current,
-                "answers": db.query(Answer).filter(
-                    Answer.question_id == current.id
-                ).all(),
-                "skipped": skipped_ids,
-                "error": "Vyplňte odpoveď alebo použite Preskočiť."
-            }
-        )
+
+    total_questions = len(questions)
+
+    return render_question(
+        current,
+        skipped_ids,
+        request,
+        db,
+        current_number=current.order_number,
+        total_questions=total_questions,
+        error="Vyplňte odpoveď alebo použite Preskočiť."
+    )
 
     status = "skipped" if action == "skip" else "answered"
 
@@ -446,7 +446,8 @@ def submit_answer(request: Request,
 
 def render_question(question, skipped, request, db,
                     current_number=None,
-                    total_questions=None):
+                    total_questions=None,
+                    error=None):
 
     answers = db.query(Answer).filter(
         Answer.question_id == question.id
@@ -457,7 +458,7 @@ def render_question(question, skipped, request, db,
         "question": question,
         "answers": answers,
         "skipped": skipped,
-        "error": None,
+        "error": error,
         "current_number": current_number,
         "total_questions": total_questions
     })

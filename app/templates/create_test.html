@@ -1,0 +1,20 @@
+<h2>Vytvoriť nový test</h2>
+
+<form action="/admin/create-test" method="post" enctype="multipart/form-data">
+
+    <div>
+        <label>Názov testu:</label>
+        <input type="text" name="name" required>
+    </div>
+
+    <div style="margin-top: 10px;">
+        <label>Import otázok (CSV – voliteľné):</label>
+        <input type="file" name="csv_file">
+    </div>
+
+    <div style="margin-top: 15px;">
+        <button type="submit">Vytvoriť test</button>
+        <a href="/admin">Späť</a>
+    </div>
+
+</form>

@@ -170,6 +170,7 @@
     <th>ID</th>
     <th>Username</th>
     <th>Stav</th>
+    <th>Progres</th>
     <th>Priradený test</th>
     <th>Priradiť</th>
     <th>Odobrať</th>
@@ -191,7 +192,14 @@
             —
         {% endif %}
     </td>
-
+<td>
+    {% if user_progress[u.id] %}
+        {{ user_progress[u.id].answered }} /
+        {{ user_progress[u.id].total }}
+    {% else %}
+        —
+    {% endif %}
+</td>
     <td>
         {% if u.assigned_test_id %}
             {% for t in tests %}

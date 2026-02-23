@@ -1,17 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="light">
 <head>
     <title>Admin panel</title>
+
     <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #f6f8ff, #eef1ff);
+            --card-bg: white;
+            --text: #222;
+            --muted: #777;
+            --border: #f0f0f0;
+            --primary: #4f73ff;
+            --primary-hover: #3d5fe0;
+            --danger: #ff6b6b;
+            --danger-hover: #e85b5b;
+        }
+
+        [data-theme="dark"] {
+            --bg-gradient: linear-gradient(135deg, #1f2235, #2b2f4a);
+            --card-bg: #2f3354;
+            --text: #f0f0f0;
+            --muted: #bbb;
+            --border: #3c4060;
+            --primary: #6c8cff;
+            --primary-hover: #5676ff;
+            --danger: #ff7b7b;
+            --danger-hover: #ff5c5c;
+        }
+
         body {
             font-family: "Segoe UI", Arial, sans-serif;
             margin: 0;
             padding: 40px;
-            background: linear-gradient(135deg, #f6f8ff, #eef1ff);
-        }
-
-        h2 {
-            margin-top: 0;
+            background: var(--bg-gradient);
+            color: var(--text);
+            transition: 0.3s;
         }
 
         .header {
@@ -21,18 +44,27 @@
             margin-bottom: 30px;
         }
 
-        .logout {
-            text-decoration: none;
-            font-weight: bold;
-            color: #4f73ff;
+        .theme-toggle {
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-weight: 500;
+        }
+
+        .theme-toggle:hover {
+            background: var(--primary-hover);
         }
 
         .section {
-            background: white;
+            background: var(--card-bg);
             padding: 25px;
             border-radius: 16px;
             margin-bottom: 30px;
             box-shadow: 0 15px 30px rgba(0,0,0,0.08);
+            transition: 0.3s;
         }
 
         table {
@@ -44,24 +76,25 @@
         th {
             text-align: left;
             font-size: 13px;
-            color: #777;
+            color: var(--muted);
             padding-bottom: 10px;
         }
 
         td {
             padding: 10px 6px;
-            border-top: 1px solid #f0f0f0;
+            border-top: 1px solid var(--border);
         }
 
         tr:hover {
-            background: #fafbff;
+            background: rgba(0,0,0,0.03);
         }
 
         input, select {
             padding: 6px 8px;
             border-radius: 8px;
-            border: 1px solid #ddd;
-            font-size: 14px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
         }
 
         button {
@@ -70,21 +103,21 @@
             border: none;
             cursor: pointer;
             font-weight: 500;
-            background: #4f73ff;
+            background: var(--primary);
             color: white;
             transition: 0.2s;
         }
 
         button:hover {
-            background: #3d5fe0;
+            background: var(--primary-hover);
         }
 
         .danger {
-            background: #ff6b6b;
+            background: var(--danger);
         }
 
         .danger:hover {
-            background: #e85b5b;
+            background: var(--danger-hover);
         }
 
         .status-finished {
@@ -96,158 +129,41 @@
             color: #f39c12;
             font-weight: bold;
         }
-
-        .progress {
-            font-size: 13px;
-            color: #555;
-        }
-
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2>Admin panel</h2>
     <div>
+        <h2>Admin panel</h2>
         Prihlásený: <strong>{{ admin.username }}</strong>
         |
-        <a class="logout" href="/logout">Odhlásiť</a>
+        <a href="/logout">Odhlásiť</a>
     </div>
+
+    <button class="theme-toggle" onclick="toggleTheme()">
+        🌙 Dark mode
+    </button>
 </div>
 
-<!-- TEST MANAGEMENT -->
-<div class="section">
-    <h3>Testy</h3>
+<!-- obsah necháš rovnaký ako máš teraz -->
 
-    <form method="post" action="/admin/create-test">
-        <input type="text" name="name" placeholder="Názov testu" required>
-        <button type="submit">Vytvoriť test</button>
-    </form>
+<script>
+    const html = document.documentElement;
 
-    <table>
-        <tr>
-            <th>ID</th>
-            <th>Názov</th>
-            <th>CSV</th>
-            <th>Otázky</th>
-            <th>Premenovať</th>
-            <th>Zmazať</th>
-        </tr>
+    function toggleTheme() {
+        const current = html.getAttribute("data-theme");
+        const next = current === "dark" ? "light" : "dark";
+        html.setAttribute("data-theme", next);
+        localStorage.setItem("adminTheme", next);
+    }
 
-        {% for t in tests %}
-        <tr>
-            <td>{{ t.id }}</td>
-            <td>{{ t.name }}</td>
-            <td>{{ t.source_csv if t.source_csv else "—" }}</td>
-            <td>{{ t.questions|length }}</td>
-
-            <td>
-                <form method="post" action="/admin/rename-test">
-                    <input type="hidden" name="test_id" value="{{ t.id }}">
-                    <input type="text" name="new_name" value="{{ t.name }}">
-                    <button type="submit">Uložiť</button>
-                </form>
-            </td>
-
-            <td>
-                <form method="post" action="/admin/delete-test">
-                    <input type="hidden" name="test_id" value="{{ t.id }}">
-                    <button class="danger" type="submit"
-                        onclick="return confirm('Naozaj chcete zmazať tento test?')">
-                        Vymazať
-                    </button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-
-<!-- USER MANAGEMENT -->
-<div class="section">
-    <h3>Používatelia</h3>
-
-    <form method="post" action="/admin/create-user">
-        <input type="text" name="username" placeholder="Username" required>
-        <input type="password" name="password" placeholder="Heslo" required>
-        <button type="submit">Vytvoriť používateľa</button>
-    </form>
-
-    <table>
-        <tr>
-            <th>ID</th>
-            <th>Username</th>
-            <th>Stav</th>
-            <th>Progres</th>
-            <th>Test</th>
-        </tr>
-
-        {% for u in users %}
-        <tr>
-            <td>{{ u.id }}</td>
-            <td>{{ u.username }}</td>
-
-            <td>
-                {% if u.has_finished %}
-                    <span class="status-finished">Ukončený</span>
-                {% elif u.assigned_test_id %}
-                    <span class="status-active">Rozpracovaný</span>
-                {% else %}
-                    —
-                {% endif %}
-            </td>
-
-            <td class="progress">
-                {% if user_progress[u.id] %}
-                    {{ user_progress[u.id].answered }} /
-                    {{ user_progress[u.id].total }}
-                {% else %}
-                    —
-                {% endif %}
-            </td>
-
-            <td>
-                {% if u.assigned_test_id %}
-                    {% for t in tests %}
-                        {% if t.id == u.assigned_test_id %}
-                            {{ t.name }}
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    —
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-
-<!-- ARCHIVE -->
-<div class="section">
-    <h3>Archivované testy</h3>
-
-    <table>
-        <tr>
-            <th>ID</th>
-            <th>Test</th>
-            <th>Skóre</th>
-            <th>Dátum</th>
-            <th></th>
-        </tr>
-
-        {% for r in results %}
-        <tr>
-            <td>{{ r.id }}</td>
-            <td>{{ r.username }} – {{ r.test_name }}</td>
-            <td>{{ r.score_percent }} %</td>
-            <td>{{ r.completed_at }}</td>
-            <td>
-                <a href="/admin/result/{{ r.id }}">Review</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
+    // načítanie uloženého módu
+    const savedTheme = localStorage.getItem("adminTheme");
+    if (savedTheme) {
+        html.setAttribute("data-theme", savedTheme);
+    }
+</script>
 
 </body>
 </html>

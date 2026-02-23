@@ -352,7 +352,18 @@ def submit_answer(request: Request,
             return RedirectResponse("/question", status_code=302)
 
     if action == "next" and not answer_ids:
-        return render_question(current, skipped_ids, request, db)
+    return templates.TemplateResponse(
+        "question.html",
+        {
+            "request": request,
+            "question": current,
+            "answers": db.query(Answer).filter(
+                Answer.question_id == current.id
+            ).all(),
+            "skipped": skipped_ids,
+            "error": "Vyplňte odpoveď alebo použite Preskočiť."
+        }
+    )
 
     status = "skipped" if action == "skip" else "answered"
 

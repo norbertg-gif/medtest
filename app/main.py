@@ -407,7 +407,7 @@ def submit_answer(request: Request,
         else:
             return RedirectResponse("/question", status_code=302)
 
-    if action == "next" and not answer_ids:
+if action == "next" and not answer_ids:
 
     total_questions = len(questions)
 

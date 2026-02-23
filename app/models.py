@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text
+from sqlalchemy.orm import relationship
 from .database import Base
 
 
@@ -8,6 +9,9 @@ class Test(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True)
     is_active = Column(Boolean, default=True)
+    source_csv = Column(String, nullable=True)
+
+    questions = relationship("Question", backref="test", cascade="all, delete")
 
 
 class User(Base):

@@ -26,7 +26,12 @@
 {% for item in snapshot %}
 <div class="question">
 
-    <h3>{{ item.question }}</h3>
+    <h3>
+    {% if item.order_number %}
+        {{ item.order_number }}.
+    {% endif %}
+    {{ item.question }}
+</h3>
 
     {% for answer in item.answers %}
         <div class="

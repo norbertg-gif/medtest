@@ -46,9 +46,14 @@
             padding: 4px;
         }
 
-        .small {
-            font-size: 12px;
-            color: #666;
+        .status-finished {
+            color: green;
+            font-weight: bold;
+        }
+
+        .status-active {
+            color: orange;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -102,19 +107,8 @@
 <tr>
     <td>{{ t.id }}</td>
     <td>{{ t.name }}</td>
-
-    <td>
-        {% if t.source_csv %}
-            {{ t.source_csv }}
-        {% else %}
-            —
-        {% endif %}
-    </td>
-
-    <td>
-        {{ t.questions|length }}
-    </td>
-
+    <td>{{ t.source_csv if t.source_csv else "—" }}</td>
+    <td>{{ t.questions|length }}</td>
     <td>
         <form method="post" action="/admin/delete-test">
             <input type="hidden" name="test_id" value="{{ t.id }}">
@@ -145,6 +139,7 @@
 <tr>
     <th>ID</th>
     <th>Username</th>
+    <th>Stav</th>
     <th>Priradený test</th>
     <th>Priradiť</th>
     <th>Odobrať</th>
@@ -158,6 +153,16 @@
     <td>{{ u.username }}</td>
 
     <td>
+        {% if u.has_finished %}
+            <span class="status-finished">Ukončený</span>
+        {% elif u.assigned_test_id %}
+            <span class="status-active">Rozpracovaný</span>
+        {% else %}
+            —
+        {% endif %}
+    </td>
+
+    <td>
         {% if u.assigned_test_id %}
             {% for t in tests %}
                 {% if t.id == u.assigned_test_id %}
@@ -169,7 +174,7 @@
         {% endif %}
     </td>
 
-    <!-- Priradiť -->
+    <!-- Priradiť test -->
     <td>
         <form method="post" action="/admin/assign-test">
             <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -185,7 +190,7 @@
         </form>
     </td>
 
-    <!-- Odobrať -->
+    <!-- Odobrať test -->
     <td>
         {% if u.assigned_test_id %}
         <form method="post" action="/admin/unassign-test">
@@ -230,6 +235,7 @@
     <th>Názov</th>
     <th>Percentá</th>
     <th>Dátum</th>
+    <th>Review</th>
 </tr>
 
 {% for r in results %}
@@ -238,6 +244,9 @@
     <td>{{ r.username }}_{{ r.test_name }}_{{ r.completed_at }}</td>
     <td>{{ r.score_percent }} %</td>
     <td>{{ r.completed_at }}</td>
+    <td>
+        <a href="/admin/result/{{ r.id }}">Review</a>
+    </td>
 </tr>
 {% endfor %}
 

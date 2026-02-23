@@ -631,3 +631,36 @@ def review_result(result_id: int,
             "snapshot": snapshot
         }
     )
+# ================= DELETE TEST =================
+
+@app.post("/admin/delete-test")
+def delete_test(request: Request,
+                test_id: int = Form(...),
+                db: Session = Depends(get_db)):
+
+    if not require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    test = db.query(Test).filter(Test.id == test_id).first()
+
+    if not test:
+        return RedirectResponse("/admin", status_code=302)
+
+    # zmaž odpovede k otázkam
+    db.query(Answer).filter(
+        Answer.question_id.in_(
+            db.query(Question.id).filter(Question.test_id == test_id)
+        )
+    ).delete(synchronize_session=False)
+
+    # zmaž otázky
+    db.query(Question).filter(
+        Question.test_id == test_id
+    ).delete()
+
+    # zmaž test
+    db.delete(test)
+
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)

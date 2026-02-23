@@ -198,7 +198,28 @@ def import_csv(request: Request,
 
     return RedirectResponse("/admin", status_code=302)
 
+# ================= RENAME TEST =================
 
+@app.post("/admin/rename-test")
+def rename_test(request: Request,
+                test_id: int = Form(...),
+                new_name: str = Form(...),
+                db: Session = Depends(get_db)):
+
+    if not require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    test = db.query(Test).filter(Test.id == test_id).first()
+
+    if not test:
+        return RedirectResponse("/admin", status_code=302)
+
+    # ochrana proti prázdnemu názvu
+    if new_name.strip():
+        test.name = new_name.strip()
+        db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
 # ================= USER MANAGEMENT =================
 
 @app.post("/admin/create-user")

@@ -513,9 +513,10 @@ def archive_test(user, questions, db):
             })
 
         snapshot.append({
-            "question": q.text,
-            "answers": answers_snapshot
-        })
+    "order_number": q.order_number,
+    "question": q.text,
+    "answers": answers_snapshot
+})
 
     # ochrana proti deleniu nulou
     if len(questions) == 0:

@@ -301,3 +301,58 @@ def submit_answer(request: Request,
     db.commit()
 
     return RedirectResponse("/question", status_code=302)
+
+# ================= USER MANAGEMENT =================
+
+@app.post("/admin/create-user")
+def create_user_admin(username: str = Form(...),
+                      password: str = Form(...),
+                      db: Session = Depends(get_db)):
+
+    if not db.query(User).filter(User.username == username).first():
+        db.add(User(
+            username=username,
+            password_hash=pbkdf2_sha256.hash(password),
+            is_admin=False
+        ))
+        db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/delete-user")
+def delete_user_admin(user_id: int = Form(...),
+                      db: Session = Depends(get_db)):
+
+    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
+    db.delete(db.query(User).filter(User.id == user_id).first())
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/assign-test")
+def assign_test(user_id: int = Form(...),
+                test_id: int = Form(...),
+                db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user.assigned_test_id = test_id
+
+    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/unassign-test")
+def unassign_test(user_id: int = Form(...),
+                  db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user.assigned_test_id = None
+
+    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)

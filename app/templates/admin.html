@@ -34,16 +34,6 @@
             display: inline;
         }
 
-        .ok {
-            color: green;
-            font-weight: bold;
-        }
-
-        .notok {
-            color: red;
-            font-weight: bold;
-        }
-
         .section {
             margin-top: 40px;
         }
@@ -57,7 +47,7 @@
         }
 
         .small {
-            font-size: 13px;
+            font-size: 12px;
             color: #666;
         }
     </style>
@@ -103,12 +93,28 @@
 <tr>
     <th>ID</th>
     <th>Názov</th>
+    <th>CSV súbor</th>
+    <th>Počet otázok</th>
     <th>Zmazať</th>
 </tr>
+
 {% for t in tests %}
 <tr>
     <td>{{ t.id }}</td>
     <td>{{ t.name }}</td>
+
+    <td>
+        {% if t.source_csv %}
+            {{ t.source_csv }}
+        {% else %}
+            —
+        {% endif %}
+    </td>
+
+    <td>
+        {{ t.questions|length }}
+    </td>
+
     <td>
         <form method="post" action="/admin/delete-test">
             <input type="hidden" name="test_id" value="{{ t.id }}">
@@ -163,7 +169,7 @@
         {% endif %}
     </td>
 
-    <!-- Priradiť test -->
+    <!-- Priradiť -->
     <td>
         <form method="post" action="/admin/assign-test">
             <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -179,7 +185,7 @@
         </form>
     </td>
 
-    <!-- Odobrať test -->
+    <!-- Odobrať -->
     <td>
         {% if u.assigned_test_id %}
         <form method="post" action="/admin/unassign-test">
@@ -206,7 +212,6 @@
             <button type="submit">Vymazať</button>
         </form>
     </td>
-
 </tr>
 {% endfor %}
 </table>
@@ -225,7 +230,6 @@
     <th>Názov</th>
     <th>Percentá</th>
     <th>Dátum</th>
-    <th>Review</th>
 </tr>
 
 {% for r in results %}
@@ -234,9 +238,6 @@
     <td>{{ r.username }}_{{ r.test_name }}_{{ r.completed_at }}</td>
     <td>{{ r.score_percent }} %</td>
     <td>{{ r.completed_at }}</td>
-    <td>
-        <a href="/admin/result/{{ r.id }}">Review</a>
-    </td>
 </tr>
 {% endfor %}
 

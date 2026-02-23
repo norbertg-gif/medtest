@@ -3,12 +3,50 @@
 <head>
     <title>Otázka</title>
     <style>
-        body { font-family: Arial; background:#f4f4f4; padding:40px; display:flex; }
-        .card { background:white; padding:25px; border-radius:8px; width:600px; box-shadow:0 0 10px rgba(0,0,0,0.1);}
-        .sidebar { margin-left:30px; background:white; padding:20px; border-radius:8px; width:150px; box-shadow:0 0 10px rgba(0,0,0,0.1);}
-        button { margin-top:15px; padding:8px 15px; margin-right:10px;}
-        .skip { background:#ddd; }
-        .error { color:red; margin-bottom:15px; }
+        body {
+            font-family: Arial;
+            background: #f4f4f4;
+            padding: 40px;
+            display: flex;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 600px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        .sidebar {
+            margin-left: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 180px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 8px 15px;
+            margin-right: 10px;
+        }
+
+        .skip {
+            background: #ddd;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .skipped-number {
+            font-weight: bold;
+            color: orange;
+        }
     </style>
 </head>
 <body>
@@ -44,7 +82,7 @@
     <strong>Preskočené:</strong>
     <ul>
         {% for s in skipped %}
-            <li>{{ s }}</li>
+            <li class="skipped-number">{{ s }}</li>
         {% endfor %}
     </ul>
 </div>

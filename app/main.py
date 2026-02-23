@@ -104,22 +104,11 @@ def admin_dashboard(request: Request, db: Session = Depends(get_db)):
 
 # ================= CREATE TEST =================
 
-@app.get("/admin/create-test", response_class=HTMLResponse)
-def create_test_form(request: Request, db: Session = Depends(get_db)):
-    admin = require_admin(request, db)
-    if not admin:
-        return RedirectResponse("/", status_code=302)
-
-    return templates.TemplateResponse("create_test.html", {"request": request})
-
-
 @app.post("/admin/create-test")
-def create_test(
-        request: Request,
-        name: str = Form(...),
-        csv_file: UploadFile = File(None),
-        db: Session = Depends(get_db)
-):
+def create_test(request: Request,
+                name: str = Form(...),
+                db: Session = Depends(get_db)):
+
     admin = require_admin(request, db)
     if not admin:
         return RedirectResponse("/", status_code=302)
@@ -127,135 +116,77 @@ def create_test(
     new_test = Test(name=name)
     db.add(new_test)
     db.commit()
-    db.refresh(new_test)
-
-    # CSV import otázok (voliteľné)
-    if csv_file:
-        content = csv_file.file.read().decode("utf-8")
-        reader = csv.DictReader(io.StringIO(content))
-
-        order = 1
-
-        for row in reader:
-            question = Question(
-                text=row["question"],
-                test_id=new_test.id,
-                order_number=order
-            )
-            db.add(question)
-            db.commit()
-            db.refresh(question)
-
-            answers = json.loads(row["answers"])
-
-            for ans in answers:
-                db.add(Answer(
-                    text=ans["text"],
-                    is_correct=ans["is_correct"],
-                    question_id=question.id
-                ))
-
-            order += 1
-
-        db.commit()
 
     return RedirectResponse("/admin", status_code=302)
 
 
-# ================= USER MANAGEMENT =================
+# ================= IMPORT CSV =================
 
-@app.post("/admin/create-user")
-def create_user_admin(username: str = Form(...),
-                      password: str = Form(...),
-                      db: Session = Depends(get_db)):
+@app.post("/admin/import")
+def import_csv(request: Request,
+               test_id: int = Form(...),
+               file: UploadFile = File(...),
+               db: Session = Depends(get_db)):
 
-    if not db.query(User).filter(User.username == username).first():
-        db.add(User(
-            username=username,
-            password_hash=pbkdf2_sha256.hash(password),
-            is_admin=False
-        ))
+    admin = require_admin(request, db)
+    if not admin:
+        return RedirectResponse("/", status_code=302)
+
+    test = db.query(Test).filter(Test.id == test_id).first()
+    if not test:
+        return RedirectResponse("/admin", status_code=302)
+
+    content = file.file.read().decode("utf-8")
+    reader = csv.DictReader(io.StringIO(content))
+
+    order = 1
+
+    for row in reader:
+        question = Question(
+            text=row["question"],
+            test_id=test.id,
+            order_number=order
+        )
+        db.add(question)
         db.commit()
+        db.refresh(question)
 
-    return RedirectResponse("/admin", status_code=302)
+        answers = json.loads(row["answers"])
 
+        for ans in answers:
+            db.add(Answer(
+                text=ans["text"],
+                is_correct=ans["is_correct"],
+                question_id=question.id
+            ))
 
-@app.post("/admin/delete-user")
-def delete_user_admin(user_id: int = Form(...),
-                      db: Session = Depends(get_db)):
+        order += 1
 
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.delete(db.query(User).filter(User.id == user_id).first())
     db.commit()
+
     return RedirectResponse("/admin", status_code=302)
 
 
-@app.post("/admin/assign-test")
-def assign_test(user_id: int = Form(...),
+# ================= DELETE TEST =================
+
+@app.post("/admin/delete-test")
+def delete_test(request: Request,
                 test_id: int = Form(...),
                 db: Session = Depends(get_db)):
 
-    user = db.query(User).filter(User.id == user_id).first()
-    user.assigned_test_id = test_id
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/unassign-test")
-def unassign_test(user_id: int = Form(...),
-                  db: Session = Depends(get_db)):
-
-    user = db.query(User).filter(User.id == user_id).first()
-    user.assigned_test_id = None
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/reset-user")
-def reset_user(user_id: int = Form(...),
-               db: Session = Depends(get_db)):
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-# ================= TEST FLOW =================
-
-@app.get("/question", response_class=HTMLResponse)
-def get_question(request: Request, db: Session = Depends(get_db)):
-
-    user_id = request.session.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user or not user.assigned_test_id:
+    admin = require_admin(request, db)
+    if not admin:
         return RedirectResponse("/", status_code=302)
 
-    questions = db.query(Question)\
-        .filter(Question.test_id == user.assigned_test_id)\
-        .order_by(Question.order_number)\
-        .all()
+    db.query(Answer).filter(
+        Answer.question_id.in_(
+            db.query(Question.id).filter(Question.test_id == test_id)
+        )
+    ).delete(synchronize_session=False)
 
-    user_answers = db.query(UserAnswer)\
-        .filter(UserAnswer.user_id == user_id)\
-        .all()
+    db.query(Question).filter(Question.test_id == test_id).delete()
+    db.query(Test).filter(Test.id == test_id).delete()
 
-    existing = {ua.question_id for ua in user_answers}
-    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+    db.commit()
 
-    for q in questions:
-        if q.id not in existing:
-            return render_question(q, skipped, request, db)
-
-    if skipped:
-        q = db.query(Question).filter(Question.id == skipped[0]).first()
-        return render_question(q, skipped, request, db)
-
-    return archive_test(user, questions, user_id, db)
+    return RedirectResponse("/admin", status_code=302)

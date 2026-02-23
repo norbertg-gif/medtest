@@ -95,6 +95,16 @@
 <tr>
     <td>{{ t.id }}</td>
     <td>{{ t.name }}</td>
+
+<td>
+    <form method="post" action="/admin/rename-test">
+        <input type="hidden" name="test_id" value="{{ t.id }}">
+        <input type="text" name="new_name"
+               value="{{ t.name }}"
+               style="width:140px;">
+        <button type="submit">Uložiť</button>
+    </form>
+</td>
     <td>{{ t.source_csv if t.source_csv else "—" }}</td>
     <td>{{ t.questions|length }}</td>
     <td>

@@ -113,7 +113,23 @@
     </style>
 </head>
 <body>
-
+<div style="
+    position:absolute;
+    top:20px;
+    right:40px;
+    background: rgba(255,255,255,0.15);
+    padding:8px 14px;
+    border-radius:8px;
+    color:white;
+    font-weight:500;
+    backdrop-filter: blur(5px);
+">
+    {{ username }}
+    |
+    <a href="/logout" style="color:white; text-decoration:none;">
+        Odhlásiť
+    </a>
+</div>
 <div class="container">
 
     <div class="card">

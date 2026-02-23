@@ -425,14 +425,25 @@ def render_question(question, skipped, request, db):
 
 def archive_test(user, questions, db):
 
-    correct_count = 0
-    snapshot = []
+    # 1️⃣ ochrana proti dvojitému spusteniu
+    if user.has_finished:
+        return HTMLResponse("<h2>Test už bol uložený.</h2>")
+
+    if not user.assigned_test_id:
+        return HTMLResponse("<h2>Chyba: test nie je priradený.</h2>")
 
     test = db.query(Test).filter(
         Test.id == user.assigned_test_id
     ).first()
 
+    if not test:
+        return HTMLResponse("<h2>Chyba: test neexistuje.</h2>")
+
+    correct_count = 0
+    snapshot = []
+
     for q in questions:
+
         answers = db.query(Answer).filter(
             Answer.question_id == q.id
         ).all()
@@ -442,7 +453,10 @@ def archive_test(user, questions, db):
             UserAnswer.question_id == q.id
         ).first()
 
-        selected = json.loads(ua.selected_answers) if ua else []
+        if ua and ua.selected_answers:
+            selected = json.loads(ua.selected_answers)
+        else:
+            selected = []
 
         correct_ids = [str(a.id) for a in answers if a.is_correct]
         is_correct = set(selected) == set(correct_ids)
@@ -463,7 +477,11 @@ def archive_test(user, questions, db):
             "answers": answers_snapshot
         })
 
-    percent = round((correct_count / len(questions)) * 100, 2)
+    # ochrana proti deleniu nulou
+    if len(questions) == 0:
+        percent = 0
+    else:
+        percent = round((correct_count / len(questions)) * 100, 2)
 
     db.add(TestResult(
         user_id=user.id,
@@ -477,6 +495,7 @@ def archive_test(user, questions, db):
         snapshot=json.dumps(snapshot)
     ))
 
+    # nastav stav až PO vytvorení výsledku
     user.has_finished = True
     user.assigned_test_id = None
 

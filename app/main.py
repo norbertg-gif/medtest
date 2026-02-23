@@ -500,3 +500,21 @@ def review_result(result_id: int,
             "snapshot": snapshot
         }
     )
+                      # ================= DELETE ARCHIVED RESULT =================
+
+@app.post("/admin/delete-result")
+def delete_result(request: Request,
+                  result_id: int = Form(...),
+                  db: Session = Depends(get_db)):
+
+    admin = require_admin(request, db)
+    if not admin:
+        return RedirectResponse("/", status_code=302)
+
+    db.query(TestResult).filter(
+        TestResult.id == result_id
+    ).delete()
+
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)

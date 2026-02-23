@@ -435,3 +435,32 @@ def archive_test(user, questions, db):
     db.commit()
 
     return HTMLResponse("<h2>Test uložený do archívu.</h2>")
+
+# ================= ARCHIVE REVIEW =================
+
+@app.get("/admin/result/{result_id}", response_class=HTMLResponse)
+def review_result(result_id: int,
+                  request: Request,
+                  db: Session = Depends(get_db)):
+
+    admin = require_admin(request, db)
+    if not admin:
+        return RedirectResponse("/", status_code=302)
+
+    result = db.query(TestResult).filter(
+        TestResult.id == result_id
+    ).first()
+
+    if not result:
+        return HTMLResponse("<h2>Výsledok neexistuje.</h2>")
+
+    snapshot = json.loads(result.snapshot)
+
+    return templates.TemplateResponse(
+        "result_review.html",
+        {
+            "request": request,
+            "result": result,
+            "snapshot": snapshot
+        }
+    )

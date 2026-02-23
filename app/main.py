@@ -356,3 +356,20 @@ def unassign_test(user_id: int = Form(...),
     db.commit()
 
     return RedirectResponse("/admin", status_code=302)
+
+@app.post("/admin/reset-user")
+def reset_user(user_id: int = Form(...),
+               db: Session = Depends(get_db)):
+
+    # vymaž odpovede používateľa
+    db.query(UserAnswer).filter(
+        UserAnswer.user_id == user_id
+    ).delete()
+
+    # nastav že test ešte nie je dokončený
+    user = db.query(User).filter(User.id == user_id).first()
+    user.has_finished = False
+
+    db.commit()
+
+    return RedirectResponse("/admin", status_code=302)

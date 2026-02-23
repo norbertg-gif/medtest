@@ -314,31 +314,59 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         .order_by(Question.order_number)\
         .all()
 
+    total_questions = len(questions)
+
     user_answers = db.query(UserAnswer)\
         .filter(UserAnswer.user_id == user.id)\
         .all()
 
-    answered_ids = {ua.question_id for ua in user_answers if ua.status == "answered"}
-    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
-    # prevod skipped IDs na poradové čísla
+    answered_ids = {
+        ua.question_id for ua in user_answers
+        if ua.status == "answered"
+    }
+
+    skipped_ids = [
+        ua.question_id for ua in user_answers
+        if ua.status == "skipped"
+    ]
+
+    # prevedieme skipped na poradové čísla
     skipped_orders = []
-
     for qid in skipped_ids:
-    q = db.query(Question).filter(Question.id == qid).first()
-    if q:
-        skipped_orders.append(q.order_number)
+        q_obj = db.query(Question).filter(
+            Question.id == qid
+        ).first()
+        if q_obj:
+            skipped_orders.append(q_obj.order_number)
 
-    # nové otázky
+    # 1️⃣ nové otázky
     for q in questions:
         if q.id not in answered_ids and q.id not in skipped_ids:
-            return render_question(q, skipped_ids, request, db)
+            return render_question(
+                q,
+                skipped_orders,
+                request,
+                db,
+                current_number=q.order_number,
+                total_questions=total_questions
+            )
 
-    # preskočené
+    # 2️⃣ preskočené
     if skipped_ids:
-        q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
-        return render_question(q, skipped_orders, request, db)
+        q = db.query(Question).filter(
+            Question.id == skipped_ids[0]
+        ).first()
 
-    # archivuj
+        return render_question(
+            q,
+            skipped_orders,
+            request,
+            db,
+            current_number=q.order_number,
+            total_questions=total_questions
+        )
+
+    # 3️⃣ archivuj
     return archive_test(user, questions, db)
 
 
@@ -416,7 +444,10 @@ def submit_answer(request: Request,
     return RedirectResponse("/question", status_code=302)
 
 
-def render_question(question, skipped, request, db):
+def render_question(question, skipped, request, db,
+                    current_number=None,
+                    total_questions=None):
+
     answers = db.query(Answer).filter(
         Answer.question_id == question.id
     ).all()
@@ -426,7 +457,9 @@ def render_question(question, skipped, request, db):
         "question": question,
         "answers": answers,
         "skipped": skipped,
-        "error": None
+        "error": None,
+        "current_number": current_number,
+        "total_questions": total_questions
     })
 
 

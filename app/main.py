@@ -453,6 +453,14 @@ def render_question(question, skipped, request, db,
         User.id == request.session.get("user_id")
     ).first()
 
+    test_name = ""
+    if user and user.assigned_test_id:
+        test = db.query(Test).filter(
+            Test.id == user.assigned_test_id
+        ).first()
+        if test:
+            test_name = test.name
+
     answers = db.query(Answer).filter(
         Answer.question_id == question.id
     ).all()
@@ -465,7 +473,8 @@ def render_question(question, skipped, request, db,
         "error": error,
         "current_number": current_number,
         "total_questions": total_questions,
-        "username": user.username if user else ""
+        "username": user.username if user else "",
+        "test_name": test_name
     })
 
 

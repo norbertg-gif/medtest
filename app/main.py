@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.templating import Jinja2Templates
 from passlib.hash import pbkdf2_sha256
+from typing import List
 import os
 import csv
 import io
@@ -118,7 +119,7 @@ def create_test(request: Request,
     return RedirectResponse("/admin", status_code=302)
 
 
-# ================= IMPORT CSV (TVÔJ FORMÁT) =================
+# ================= IMPORT CSV =================
 
 @app.post("/admin/import")
 def import_csv(request: Request,
@@ -133,6 +134,20 @@ def import_csv(request: Request,
     test = db.query(Test).filter(Test.id == test_id).first()
     if not test:
         return RedirectResponse("/admin", status_code=302)
+
+    # zapíš názov CSV
+    test.source_csv = file.filename
+    db.commit()
+
+    # zmaž staré otázky testu
+    db.query(Answer).filter(
+        Answer.question_id.in_(
+            db.query(Question.id).filter(Question.test_id == test.id)
+        )
+    ).delete(synchronize_session=False)
+
+    db.query(Question).filter(Question.test_id == test.id).delete()
+    db.commit()
 
     content = file.file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content), delimiter=";")
@@ -170,86 +185,6 @@ def import_csv(request: Request,
     return RedirectResponse("/admin", status_code=302)
 
 
-# ================= DELETE TEST =================
-
-@app.post("/admin/delete-test")
-def delete_test(request: Request,
-                test_id: int = Form(...),
-                db: Session = Depends(get_db)):
-
-    admin = require_admin(request, db)
-    if not admin:
-        return RedirectResponse("/", status_code=302)
-
-    db.query(Answer).filter(
-        Answer.question_id.in_(
-            db.query(Question.id).filter(Question.test_id == test_id)
-        )
-    ).delete(synchronize_session=False)
-
-    db.query(Question).filter(Question.test_id == test_id).delete()
-    db.query(Test).filter(Test.id == test_id).delete()
-
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-# ================= USER MANAGEMENT =================
-
-@app.post("/admin/create-user")
-def create_user_admin(username: str = Form(...),
-                      password: str = Form(...),
-                      db: Session = Depends(get_db)):
-
-    if not db.query(User).filter(User.username == username).first():
-        db.add(User(
-            username=username,
-            password_hash=pbkdf2_sha256.hash(password),
-            is_admin=False
-        ))
-        db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/delete-user")
-def delete_user_admin(user_id: int = Form(...),
-                      db: Session = Depends(get_db)):
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.delete(db.query(User).filter(User.id == user_id).first())
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/assign-test")
-def assign_test(user_id: int = Form(...),
-                test_id: int = Form(...),
-                db: Session = Depends(get_db)):
-
-    user = db.query(User).filter(User.id == user_id).first()
-    user.assigned_test_id = test_id
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
-
-@app.post("/admin/unassign-test")
-def unassign_test(user_id: int = Form(...),
-                  db: Session = Depends(get_db)):
-
-    user = db.query(User).filter(User.id == user_id).first()
-    user.assigned_test_id = None
-
-    db.query(UserAnswer).filter(UserAnswer.user_id == user_id).delete()
-    db.commit()
-
-    return RedirectResponse("/admin", status_code=302)
-
 # ================= TEST FLOW =================
 
 @app.get("/question", response_class=HTMLResponse)
@@ -271,17 +206,22 @@ def get_question(request: Request, db: Session = Depends(get_db)):
         .all()
 
     existing = {ua.question_id for ua in user_answers}
-    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+    skipped_ids = [ua.question_id for ua in user_answers if ua.status == "skipped"]
+
+    skipped = [
+        db.query(Question).filter(Question.id == qid).first().order_number
+        for qid in skipped_ids
+    ]
 
     for q in questions:
         if q.id not in existing:
             return render_question(q, skipped, request, db)
 
-    if skipped:
-        q = db.query(Question).filter(Question.id == skipped[0]).first()
+    if skipped_ids:
+        q = db.query(Question).filter(Question.id == skipped_ids[0]).first()
         return render_question(q, skipped, request, db)
 
-    return archive_test(user, questions, user_id, db)
+    return HTMLResponse("<h2>Test dokončený.</h2>")
 
 
 def render_question(question, skipped, request, db):
@@ -299,7 +239,7 @@ def render_question(question, skipped, request, db):
 @app.post("/answer")
 def submit_answer(request: Request,
                   action: str = Form(...),
-                  answer_ids: list[str] = Form([]),
+                  answer_ids: List[str] = Form(default=[]),
                   db: Session = Depends(get_db)):
 
     user_id = request.session.get("user_id")
@@ -315,17 +255,12 @@ def submit_answer(request: Request,
         .all()
 
     existing = {ua.question_id for ua in user_answers}
-    skipped = [ua.question_id for ua in user_answers if ua.status == "skipped"]
 
     current = None
-
     for q in questions:
         if q.id not in existing:
             current = q
             break
-
-    if not current and skipped:
-        current = db.query(Question).filter(Question.id == skipped[0]).first()
 
     status = "skipped" if action == "skip" else "answered"
 

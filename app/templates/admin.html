@@ -172,7 +172,7 @@ button:hover {
     </div>
 </div>
 
-<!-- TEST MANAGEMENT -->
+<!--  MANAGEMENT -->
 <div class="section">
     <h3>Testy</h3>
 
@@ -251,8 +251,10 @@ button:hover {
             <th>Username</th>
             <th>Stav</th>
             <th>Progres</th>
-            <th>Test</th>
-            <th>Zmazať</th>
+           <th>Test</th>
+<th>Priradiť</th>
+<th>Reset</th>
+<th>Zmazať</th>
         </tr>
 
         {% for u in users %}
@@ -296,6 +298,42 @@ button:hover {
                     —
                 {% endif %}
             </td>
+            <td>
+<form method="post" action="/admin/assign-test">
+    <input type="hidden" name="user_id" value="{{ u.id }}">
+    <select name="test_id">
+
+        <option value="">—</option>
+
+        {% for t in tests %}
+        <option value="{{ t.id }}"
+        {% if u.assigned_test_id == t.id %}selected{% endif %}>
+            {{ t.name }}
+        </option>
+        {% endfor %}
+
+    </select>
+
+    <button type="submit">Uložiť</button>
+</form>
+</td>
+
+<td>
+<form method="post" action="/admin/reset-user">
+    <input type="hidden" name="user_id" value="{{ u.id }}">
+    <button type="submit">Reset</button>
+</form>
+</td>
+
+<td>
+<form method="post" action="/admin/delete-user">
+    <input type="hidden" name="user_id" value="{{ u.id }}">
+    <button class="danger" type="submit"
+        onclick="return confirm('Zmazať používateľa?')">
+        Vymazať
+    </button>
+</form>
+</td>
             <td>
     <form method="post" action="/admin/delete-user">
         <input type="hidden" name="user_id" value="{{ u.id }}">
